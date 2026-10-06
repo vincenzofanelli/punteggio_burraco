@@ -1,0 +1,25 @@
+{
+  "name": "Punteggio Burraco",
+  "short_name": "Burraco",
+  "description": "Segnapunti per partite di Burraco",
+  "start_url": "/punteggio_burraco/burraco.html",
+  "scope": "/punteggio_burraco/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1f7a3b",
+  "background_color": "#1f7a3b",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

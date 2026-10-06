@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Burraco Score</title>
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Burraco">
+<meta name="theme-color" content="#1f7a3b">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 /* Layout: mobile-first single-column, card stack */
 :root {
@@ -253,8 +260,9 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .hist-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .hist-item:last-child { border-bottom: none; }
 .hist-meta { font-size: .72rem; color: var(--fg-3); margin-bottom: 5px; }
+.hist-teams { font-size: .8rem; font-weight: 600; margin-bottom: 5px; display: flex; gap: 6px; align-items: center; }
 .hist-scores { font-size: .875rem; display: flex; gap: 8px; align-items: center; }
-.win-tag { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 1px 6px; border-radius: 99px; background: var(--ok); color: #fff; }
+.win-emoji { font-size: 1.1rem; line-height: 1; }
 
 /* ── Resume banner ─────────────────────────── */
 .banner {
@@ -829,13 +837,13 @@ function renderHome() {
     item.innerHTML = `
       <div class="hist-meta">${ds} ${ts} · ${r.n} smazzate · VP ${r.vpA}–${r.vpB}</div>
       <div class="hist-scores">
-        <span style="color:var(--a);font-weight:600;">${r.nA}</span>
-        ${wA ? '<span class="win-tag">W</span>' : ''}
-        <span class="num" style="color:var(--a);margin-left:2px;">${fmt(r.tA)}</span>
+        <span class="num" style="color:var(--a);">${fmt(r.tA)}</span>
+        <span style="color:var(--a);font-weight:600;margin-left:2px;">${r.nA}</span>
+        ${wA ? '<span class="win-emoji">😊</span>' : ''}
         <span style="color:var(--fg-3);flex:1;text-align:center;">—</span>
-        <span class="num" style="color:var(--b);margin-right:2px;">${fmt(r.tB)}</span>
-        ${wB ? '<span class="win-tag">W</span>' : ''}
-        <span style="color:var(--b);font-weight:600;">${r.nB}</span>
+        ${wB ? '<span class="win-emoji">😊</span>' : ''}
+        <span style="color:var(--b);font-weight:600;margin-right:2px;">${r.nB}</span>
+        <span class="num" style="color:var(--b);">${fmt(r.tB)}</span>
       </div>`;
     card.appendChild(item);
   });
