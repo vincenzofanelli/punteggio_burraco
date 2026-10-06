@@ -323,11 +323,11 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
       <div class="score-grid">
         <div class="field">
           <label><span class="dot dot-a"></span>Squadra A</label>
-          <input type="text" id="s-na" value="Squadra A" maxlength="18">
+          <input type="text" id="s-na" value="Squadra A" maxlength="18" onfocus="this.select()">
         </div>
         <div class="field">
           <label><span class="dot dot-b"></span>Squadra B</label>
-          <input type="text" id="s-nb" value="Squadra B" maxlength="18">
+          <input type="text" id="s-nb" value="Squadra B" maxlength="18" onfocus="this.select()">
         </div>
       </div>
       <div class="field">
@@ -862,6 +862,41 @@ function signed(n) { return (n >= 0 ? '+' : '') + fmt(n); }
 // ── Boot ──────────────────────────────────────────────────────────────────────
 load();
 renderHome();
+</script>
+
+<!-- Aggiornamento banner -->
+<div id="upd-banner" hidden style="
+  position:fixed;bottom:0;left:0;right:0;z-index:9999;
+  background:#1f7a3b;color:#fff;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;font-size:.95rem;font-weight:500;
+  box-shadow:0 -2px 12px rgba(0,0,0,.25);
+">
+  <span>🔄 Nuova versione disponibile</span>
+  <button onclick="doUpdate()" style="
+    background:#fff;color:#1f7a3b;border:none;border-radius:8px;
+    padding:7px 16px;font-weight:700;font-size:.9rem;cursor:pointer;
+  ">Aggiorna</button>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  let newWorker;
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    reg.addEventListener('updatefound', () => {
+      newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          document.getElementById('upd-banner').hidden = false;
+        }
+      });
+    });
+  });
+  function doUpdate() {
+    if (newWorker) newWorker.postMessage('skipWaiting');
+    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+  }
+}
 </script>
 </body>
 </html>
