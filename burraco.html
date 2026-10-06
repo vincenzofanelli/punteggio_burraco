@@ -288,7 +288,7 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
       <h1>Burraco</h1>
       <p style="color:var(--fg-2);margin-top:4px;font-size:.9375rem;">Segnapunti</p>
     </div>
-    <button onclick="if(confirm('Chiudere l\'app?')) window.close()" style="
+    <button onclick="window.history.go(-(window.history.length-1)); setTimeout(()=>window.close(),300);" style="
       background:none;border:none;cursor:pointer;padding:6px;
       color:var(--fg-3);font-size:1.5rem;line-height:1;margin-top:2px;
     " title="Chiudi">✕</button>
@@ -895,9 +895,7 @@ if ('serviceWorker' in navigator) {
   }
 
   navigator.serviceWorker.register('./sw.js').then(reg => {
-    // Worker già in attesa (es. pagina riaperta dopo aggiornamento)
     if (reg.waiting) showBanner(reg.waiting);
-
     reg.addEventListener('updatefound', () => {
       const w = reg.installing;
       w.addEventListener('statechange', () => {
@@ -909,8 +907,10 @@ if ('serviceWorker' in navigator) {
   });
 
   function doUpdate() {
-    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
-    if (newWorker) newWorker.postMessage('skipWaiting');
+    if (newWorker) {
+      newWorker.postMessage('skipWaiting');
+    }
+    setTimeout(() => location.reload(true), 800);
   }
 }
 </script>
