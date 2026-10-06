@@ -1,4 +1,4 @@
-const CACHE = 'burraco-v1';
+const CACHE = 'burraco-v2';
 const FILES = [
   '/punteggio_burraco/burraco.html',
   '/punteggio_burraco/manifest.json',
@@ -27,7 +27,6 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// Notifica i client quando c'è una nuova versione
 self.addEventListener('message', e => {
   if (e.data === 'skipWaiting') self.skipWaiting();
 });

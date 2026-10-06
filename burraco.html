@@ -283,9 +283,15 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
 
 <!-- ═══ HOME ════════════════════════════════════════════════════════════ -->
 <div id="v-home" class="view active">
-  <div class="mt8" style="margin-bottom: 20px;">
-    <h1>Burraco</h1>
-    <p style="color:var(--fg-2);margin-top:4px;font-size:.9375rem;">Segnapunti</p>
+  <div class="mt8" style="margin-bottom: 20px; display:flex; align-items:flex-start; justify-content:space-between;">
+    <div>
+      <h1>Burraco</h1>
+      <p style="color:var(--fg-2);margin-top:4px;font-size:.9375rem;">Segnapunti</p>
+    </div>
+    <button onclick="if(confirm('Chiudere l\'app?')) window.close()" style="
+      background:none;border:none;cursor:pointer;padding:6px;
+      color:var(--fg-3);font-size:1.5rem;line-height:1;margin-top:2px;
+    " title="Chiudi">✕</button>
   </div>
 
   <button class="btn btn-p btn-full mt8" onclick="goSetup()">+ Nuova partita</button>
