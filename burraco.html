@@ -882,19 +882,29 @@ renderHome();
 <script>
 if ('serviceWorker' in navigator) {
   let newWorker;
+
+  function showBanner(worker) {
+    newWorker = worker;
+    document.getElementById('upd-banner').hidden = false;
+  }
+
   navigator.serviceWorker.register('./sw.js').then(reg => {
+    // Worker già in attesa (es. pagina riaperta dopo aggiornamento)
+    if (reg.waiting) showBanner(reg.waiting);
+
     reg.addEventListener('updatefound', () => {
-      newWorker = reg.installing;
-      newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          document.getElementById('upd-banner').hidden = false;
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) {
+          showBanner(w);
         }
       });
     });
   });
+
   function doUpdate() {
-    if (newWorker) newWorker.postMessage('skipWaiting');
     navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+    if (newWorker) newWorker.postMessage('skipWaiting');
   }
 }
 </script>
