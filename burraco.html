@@ -288,13 +288,14 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
       <h1>Burraco</h1>
       <p style="color:var(--fg-2);margin-top:4px;font-size:.9375rem;">Segnapunti</p>
     </div>
-    <button onclick="window.history.go(-(window.history.length-1)); setTimeout(()=>window.close(),300);" style="
+    <button onclick="window.close()" style="
       background:none;border:none;cursor:pointer;padding:6px;
       color:var(--fg-3);font-size:1.5rem;line-height:1;margin-top:2px;
     " title="Chiudi">✕</button>
   </div>
 
   <button class="btn btn-p btn-full mt8" onclick="goSetup()">+ Nuova partita</button>
+  <button class="btn btn-s btn-full" onclick="aggiornaApp()" style="margin-top:8px;font-size:.85rem;">🔄 Aggiorna app</button>
 
   <div id="resume-banner" hidden class="banner stack gap8" style="margin-top:12px;">
     <div>
@@ -870,48 +871,16 @@ load();
 renderHome();
 </script>
 
-<!-- Aggiornamento banner -->
-<div id="upd-banner" hidden style="
-  position:fixed;bottom:0;left:0;right:0;z-index:9999;
-  background:#1f7a3b;color:#fff;
-  display:flex;align-items:center;justify-content:space-between;
-  padding:14px 16px;font-size:.95rem;font-weight:500;
-  box-shadow:0 -2px 12px rgba(0,0,0,.25);
-">
-  <span>🔄 Nuova versione disponibile</span>
-  <button onclick="navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}).then(function(){return caches.keys()}).then(function(k){return Promise.all(k.map(function(c){return caches.delete(c)}))}).then(function(){location.reload()})" style="
-    background:#fff;color:#1f7a3b;border:none;border-radius:8px;
-    padding:7px 16px;font-weight:700;font-size:.9rem;cursor:pointer;
-  ">Aggiorna</button>
-</div>
-
 <script>
 if ('serviceWorker' in navigator) {
-  let newWorker;
-
-  function showBanner(worker) {
-    newWorker = worker;
-    document.getElementById('upd-banner').hidden = false;
-  }
-
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    if (reg.waiting) showBanner(reg.waiting);
-    reg.addEventListener('updatefound', () => {
-      const w = reg.installing;
-      w.addEventListener('statechange', () => {
-        if (w.state === 'installed' && navigator.serviceWorker.controller) {
-          showBanner(w);
-        }
-      });
-    });
-  });
-
-  function doUpdate() {
-    if (newWorker) {
-      newWorker.postMessage('skipWaiting');
-    }
-    setTimeout(() => location.reload(true), 800);
-  }
+  navigator.serviceWorker.register('./sw.js');
+}
+function aggiornaApp() {
+  navigator.serviceWorker.getRegistrations()
+    .then(regs => Promise.all(regs.map(r => r.unregister())))
+    .then(() => caches.keys())
+    .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+    .then(() => location.reload());
 }
 </script>
 </body>
