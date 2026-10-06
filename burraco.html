@@ -879,7 +879,7 @@ renderHome();
   box-shadow:0 -2px 12px rgba(0,0,0,.25);
 ">
   <span>🔄 Nuova versione disponibile</span>
-  <button onclick="doUpdate()" style="
+  <button onclick="navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}).then(function(){return caches.keys()}).then(function(k){return Promise.all(k.map(function(c){return caches.delete(c)}))}).then(function(){location.reload()})" style="
     background:#fff;color:#1f7a3b;border:none;border-radius:8px;
     padding:7px 16px;font-weight:700;font-size:.9rem;cursor:pointer;
   ">Aggiorna</button>
