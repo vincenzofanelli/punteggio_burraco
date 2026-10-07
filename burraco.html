@@ -304,18 +304,7 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   </div>
 
   <button class="btn btn-p btn-full mt8" onclick="goSetup()">+ Nuova partita</button>
-  <button class="btn btn-s btn-full" onclick="aggiornaApp()" style="margin-top:8px;font-size:.85rem;">🔄 Aggiorna app</button>
-
-  <div id="install-banner" hidden class="banner stack gap8" style="margin-top:12px;">
-    <div class="row spread" style="align-items:flex-start;">
-      <div>
-        <div style="font-weight:600;font-size:.9375rem;">📲 Installa l'app</div>
-        <div id="install-msg" style="font-size:.8125rem;color:var(--fg-2);margin-top:3px;line-height:1.45;"></div>
-      </div>
-      <button onclick="dismissInstall()" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--fg-3);font-size:1.2rem;line-height:1;flex-shrink:0;margin-left:8px;">✕</button>
-    </div>
-    <button id="install-btn" class="btn btn-p btn-full" onclick="doInstall()">Installa</button>
-  </div>
+  <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:8px;font-size:.85rem;">🔄 Aggiorna app</button>
 
   <div id="resume-banner" hidden class="banner stack gap8" style="margin-top:12px;">
     <div>
@@ -903,65 +892,60 @@ function aggiornaApp() {
     .then(() => location.reload());
 }
 
-// ── PWA Install Prompt ───────────────────────────────────────────────────────
+// ── PWA Utility button: Installa / Aggiorna ──────────────────────────────────
 let deferredPrompt = null;
 const isStandalone = window.matchMedia('(display-mode: standalone)').matches
                   || navigator.standalone === true;
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
-function showInstallBanner() {
-  if (isStandalone) return;
-  try {
-    const ts = localStorage.getItem('installDismissed');
-    if (ts && Date.now() - parseInt(ts) < 7 * 24 * 60 * 60 * 1000) return;
-  } catch(e) {}
-
-  const banner = document.getElementById('install-banner');
-  const msg    = document.getElementById('install-msg');
-  const btn    = document.getElementById('install-btn');
-
-  if (deferredPrompt) {
-    msg.textContent = 'Aggiungila alla schermata home per usarla anche offline.';
-    btn.textContent = 'Installa';
-    btn.onclick = doInstall;
-    banner.hidden = false;
-  } else if (isIOS) {
-    msg.innerHTML = 'In Safari tocca <strong>Condividi</strong> (□↑) poi <strong>"Aggiungi a Home"</strong>.';
-    btn.textContent = 'Ho capito';
-    btn.onclick = dismissInstall;
-    banner.hidden = false;
+function setUtilityBtn(label, onclick, highlight) {
+  const btn = document.getElementById('btn-utility');
+  if (!btn) return;
+  btn.textContent = label;
+  btn.onclick = onclick;
+  if (highlight) {
+    btn.style.background = 'var(--ok)';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+  } else {
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.style.border = '';
   }
 }
+
+// Default: aggiorna
+document.getElementById('btn-utility').onclick = aggiornaApp;
 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  showInstallBanner();
+  if (!isStandalone) {
+    setUtilityBtn('📲 Installa app', doInstall, true);
+  }
 });
 
 window.addEventListener('appinstalled', () => {
-  document.getElementById('install-banner').hidden = true;
   deferredPrompt = null;
+  setUtilityBtn('✓ App installata!', null, true);
+  setTimeout(() => setUtilityBtn('🔄 Aggiorna app', aggiornaApp, false), 3000);
 });
 
 function doInstall() {
-  if (!deferredPrompt) return;
+  if (!deferredPrompt) {
+    setUtilityBtn('✓ App già installata', aggiornaApp, false);
+    return;
+  }
   deferredPrompt.prompt();
   deferredPrompt.userChoice.then(choice => {
     deferredPrompt = null;
     if (choice.outcome === 'accepted') {
-      document.getElementById('install-banner').hidden = true;
+      setUtilityBtn('✓ App installata!', null, true);
+      setTimeout(() => setUtilityBtn('🔄 Aggiorna app', aggiornaApp, false), 3000);
+    } else {
+      setUtilityBtn('🔄 Aggiorna app', aggiornaApp, false);
     }
   });
 }
-
-function dismissInstall() {
-  document.getElementById('install-banner').hidden = true;
-  try { localStorage.setItem('installDismissed', String(Date.now())); } catch(e) {}
-}
-
-// iOS: beforeinstallprompt non esiste, controlla subito
-if (!isStandalone && isIOS) showInstallBanner();
 </script>
 </body>
 </html>
