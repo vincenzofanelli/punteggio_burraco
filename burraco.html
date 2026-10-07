@@ -125,6 +125,7 @@ h2 { font-size: 1.15rem; font-weight: 700; }
 .btn-p    { background: var(--a); color: #fff; }
 .btn-s    { background: var(--surface-2); color: var(--fg); border: 1px solid var(--border); }
 .btn-d    { background: var(--b); color: #fff; }
+.btn-resume { background: var(--a-bg); color: var(--a); border: 1.5px solid var(--a); }
 .btn-sm   { padding: 7px 14px; font-size: .8125rem; }
 .btn-ico  {
   width: 38px; height: 38px; padding: 0; border-radius: 50%;
@@ -285,7 +286,15 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
 <div id="v-home" class="view active">
   <div class="mt8" style="margin-bottom: 20px; display:flex; align-items:flex-start; justify-content:space-between;">
     <div>
-      <h1>Burraco</h1>
+      <div style="display:flex;align-items:center;gap:9px;">
+        <svg width="30" height="38" viewBox="0 0 30 38" aria-hidden="true" style="flex-shrink:0;margin-top:2px;">
+          <rect x="1" y="1" width="28" height="36" rx="4" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+          <text x="15" y="12" text-anchor="middle" font-size="8" fill="var(--b)" font-family="inherit" font-weight="700" letter-spacing="0">A</text>
+          <text x="15" y="28" text-anchor="middle" font-size="15" fill="var(--b)">♥</text>
+          <text x="5"  y="36" text-anchor="middle" font-size="7"  fill="var(--b)" transform="rotate(180,5,33)">A</text>
+        </svg>
+        <h1>Burraco</h1>
+      </div>
       <p style="color:var(--fg-2);margin-top:4px;font-size:.9375rem;">Segnapunti</p>
     </div>
     <button onclick="window.close()" style="
@@ -297,13 +306,24 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   <button class="btn btn-p btn-full mt8" onclick="goSetup()">+ Nuova partita</button>
   <button class="btn btn-s btn-full" onclick="aggiornaApp()" style="margin-top:8px;font-size:.85rem;">🔄 Aggiorna app</button>
 
+  <div id="install-banner" hidden class="banner stack gap8" style="margin-top:12px;">
+    <div class="row spread" style="align-items:flex-start;">
+      <div>
+        <div style="font-weight:600;font-size:.9375rem;">📲 Installa l'app</div>
+        <div id="install-msg" style="font-size:.8125rem;color:var(--fg-2);margin-top:3px;line-height:1.45;"></div>
+      </div>
+      <button onclick="dismissInstall()" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--fg-3);font-size:1.2rem;line-height:1;flex-shrink:0;margin-left:8px;">✕</button>
+    </div>
+    <button id="install-btn" class="btn btn-p btn-full" onclick="doInstall()">Installa</button>
+  </div>
+
   <div id="resume-banner" hidden class="banner stack gap8" style="margin-top:12px;">
     <div>
       <div style="font-weight:600;font-size:.9375rem;">Partita in corso</div>
       <div id="resume-info" style="font-size:.8125rem;color:var(--fg-2);margin-top:2px;"></div>
     </div>
     <div class="row gap8">
-      <button class="btn btn-p grow" onclick="resumeGame()">Riprendi</button>
+      <button class="btn btn-resume grow" onclick="resumeGame()">Riprendi</button>
       <button class="btn btn-s grow" onclick="reqAbandon()">Abbandona</button>
     </div>
   </div>
@@ -882,6 +902,66 @@ function aggiornaApp() {
     .then(keys => Promise.all(keys.map(k => caches.delete(k))))
     .then(() => location.reload());
 }
+
+// ── PWA Install Prompt ───────────────────────────────────────────────────────
+let deferredPrompt = null;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                  || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+function showInstallBanner() {
+  if (isStandalone) return;
+  try {
+    const ts = localStorage.getItem('installDismissed');
+    if (ts && Date.now() - parseInt(ts) < 7 * 24 * 60 * 60 * 1000) return;
+  } catch(e) {}
+
+  const banner = document.getElementById('install-banner');
+  const msg    = document.getElementById('install-msg');
+  const btn    = document.getElementById('install-btn');
+
+  if (deferredPrompt) {
+    msg.textContent = 'Aggiungila alla schermata home per usarla anche offline.';
+    btn.textContent = 'Installa';
+    btn.onclick = doInstall;
+    banner.hidden = false;
+  } else if (isIOS) {
+    msg.innerHTML = 'In Safari tocca <strong>Condividi</strong> (□↑) poi <strong>"Aggiungi a Home"</strong>.';
+    btn.textContent = 'Ho capito';
+    btn.onclick = dismissInstall;
+    banner.hidden = false;
+  }
+}
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallBanner();
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('install-banner').hidden = true;
+  deferredPrompt = null;
+});
+
+function doInstall() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(choice => {
+    deferredPrompt = null;
+    if (choice.outcome === 'accepted') {
+      document.getElementById('install-banner').hidden = true;
+    }
+  });
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner').hidden = true;
+  try { localStorage.setItem('installDismissed', String(Date.now())); } catch(e) {}
+}
+
+// iOS: beforeinstallprompt non esiste, controlla subito
+if (!isStandalone && isIOS) showInstallBanner();
 </script>
 </body>
 </html>
