@@ -26,6 +26,9 @@
   --b:         #b01f1f;
   --b-bg:      #fbdede;
   --ok:        #1f7a3b;
+  --warn:      #8a6800;
+  --warn-bg:   #fff8d6;
+  --warn-bdr:  #e6c84a;
   --radius:    14px;
   --radius-s:  8px;
   color-scheme: light;
@@ -44,6 +47,9 @@
     --b:         #e05a5a;
     --b-bg:      #401818;
     --ok:        #3ab060;
+    --warn:      #d4aa00;
+    --warn-bg:   #1e1a00;
+    --warn-bdr:  #6a5500;
     color-scheme: dark;
   }
 }
@@ -60,6 +66,9 @@
   --b:         #e05a5a;
   --b-bg:      #401818;
   --ok:        #3ab060;
+  --warn:      #d4aa00;
+  --warn-bg:   #1e1a00;
+  --warn-bdr:  #6a5500;
   color-scheme: dark;
 }
 
@@ -126,6 +135,7 @@ h2 { font-size: 1.15rem; font-weight: 700; }
 .btn-s    { background: var(--surface-2); color: var(--fg); border: 1px solid var(--border); }
 .btn-d    { background: var(--b); color: #fff; }
 .btn-resume { background: var(--a-bg); color: var(--a); border: 1.5px solid var(--a); }
+.btn-warn   { background: var(--warn-bg); color: var(--warn); border: 1.5px solid var(--warn-bdr); }
 .btn-sm   { padding: 7px 14px; font-size: .8125rem; }
 .btn-ico  {
   width: 38px; height: 38px; padding: 0; border-radius: 50%;
@@ -304,7 +314,6 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   </div>
 
   <button class="btn btn-p btn-full mt8" onclick="goSetup()">+ Nuova partita</button>
-  <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:8px;font-size:.85rem;">🔄 Aggiorna app</button>
 
   <div id="resume-banner" hidden class="banner stack gap8" style="margin-top:12px;">
     <div>
@@ -324,6 +333,8 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   <div id="hist-card" class="card">
     <div class="empty">Nessuna partita salvata</div>
   </div>
+
+  <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:16px;font-size:.82rem;">🔄 Aggiorna app</button>
 </div>
 
 <!-- ═══ SETUP ═══════════════════════════════════════════════════════════ -->
@@ -881,71 +892,90 @@ renderHome();
 </script>
 
 <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js');
+// ── Stato pulsante utility ────────────────────────────────────────────────────
+let deferredPrompt = null;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                  || navigator.standalone === true;
+
+function setUtility(mode) {
+  const btn = document.getElementById('btn-utility');
+  if (!btn) return;
+  btn.classList.remove('btn-s', 'btn-warn');
+  switch (mode) {
+    case 'install':
+      btn.textContent = '📲 Installa app';
+      btn.onclick = doInstall;
+      btn.classList.add('btn-warn');
+      break;
+    case 'update':
+      btn.textContent = '🔄 Aggiornamento disponibile — tocca per installare';
+      btn.onclick = aggiornaApp;
+      btn.classList.add('btn-warn');
+      break;
+    case 'done':
+      btn.textContent = '✓ Fatto!';
+      btn.onclick = null;
+      btn.classList.add('btn-warn');
+      setTimeout(() => setUtility('ok'), 3000);
+      break;
+    default:
+      btn.textContent = '🔄 Aggiorna app';
+      btn.onclick = aggiornaApp;
+      btn.classList.add('btn-s');
+  }
 }
+
+// ── Service Worker ────────────────────────────────────────────────────────────
 function aggiornaApp() {
   navigator.serviceWorker.getRegistrations()
-    .then(regs => Promise.all(regs.map(r => r.unregister())))
+    .then(regs => {
+      regs.forEach(r => { if (r.waiting) r.waiting.postMessage('skipWaiting'); });
+      return Promise.all(regs.map(r => r.unregister()));
+    })
     .then(() => caches.keys())
     .then(keys => Promise.all(keys.map(k => caches.delete(k))))
     .then(() => location.reload());
 }
 
-// ── PWA Utility button: Installa / Aggiorna ──────────────────────────────────
-let deferredPrompt = null;
-const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-                  || navigator.standalone === true;
-
-function setUtilityBtn(label, onclick, highlight) {
-  const btn = document.getElementById('btn-utility');
-  if (!btn) return;
-  btn.textContent = label;
-  btn.onclick = onclick;
-  if (highlight) {
-    btn.style.background = 'var(--ok)';
-    btn.style.color = '#fff';
-    btn.style.border = 'none';
-  } else {
-    btn.style.background = '';
-    btn.style.color = '';
-    btn.style.border = '';
-  }
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    if (reg.waiting && navigator.serviceWorker.controller) {
+      setUtility('update');
+    }
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          setUtility('update');
+        }
+      });
+    });
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+  });
 }
 
-// Default: aggiorna
-document.getElementById('btn-utility').onclick = aggiornaApp;
-
+// ── Install prompt (Android/Chrome) ──────────────────────────────────────────
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  if (!isStandalone) {
-    setUtilityBtn('📲 Installa app', doInstall, true);
-  }
+  if (!isStandalone) setUtility('install');
 });
 
 window.addEventListener('appinstalled', () => {
   deferredPrompt = null;
-  setUtilityBtn('✓ App installata!', null, true);
-  setTimeout(() => setUtilityBtn('🔄 Aggiorna app', aggiornaApp, false), 3000);
+  setUtility('done');
 });
 
 function doInstall() {
-  if (!deferredPrompt) {
-    setUtilityBtn('✓ App già installata', aggiornaApp, false);
-    return;
-  }
+  if (!deferredPrompt) { setUtility('ok'); return; }
   deferredPrompt.prompt();
   deferredPrompt.userChoice.then(choice => {
     deferredPrompt = null;
-    if (choice.outcome === 'accepted') {
-      setUtilityBtn('✓ App installata!', null, true);
-      setTimeout(() => setUtilityBtn('🔄 Aggiorna app', aggiornaApp, false), 3000);
-    } else {
-      setUtilityBtn('🔄 Aggiorna app', aggiornaApp, false);
-    }
+    setUtility(choice.outcome === 'accepted' ? 'done' : 'ok');
   });
 }
+
+setUtility('ok');
 </script>
 </body>
 </html>
