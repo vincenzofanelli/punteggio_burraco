@@ -290,6 +290,30 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 
 /* ── Divider ───────────────────────────────── */
 hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
+
+/* ── Player names grid ─────────────────────── */
+.pname-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pname-col-hdr { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding-bottom: 5px; }
+.a-hdr { color: var(--a); }
+.b-hdr { color: var(--b); }
+.pname-field { margin-bottom: 4px; }
+.pname-field input { font-size: .875rem; padding: 8px 10px; }
+.pname-drop {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--radius-s); max-height: 128px; overflow-y: auto;
+  margin-top: 2px; display: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,.12);
+}
+.pname-drop.open { display: block; }
+.pname-drop-item {
+  padding: 9px 10px; font-size: .875rem; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.pname-drop-item:last-child { border-bottom: none; }
+.pname-drop-item:active { background: var(--surface-2); }
+
+/* ── Table view ────────────────────────────── */
+#table-svg { width: 100%; max-width: 340px; display: block; margin: 0 auto; }
 </style>
 
 <!-- ═══ HOME ════════════════════════════════════════════════════════════ -->
@@ -368,6 +392,11 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
       </div>
     </div>
 
+    <div id="player-names-card" class="card stack gap8" style="display:none;">
+      <span class="label">Nomi giocatori</span>
+      <div class="pname-grid" id="pname-grid"></div>
+    </div>
+
     <div class="card stack gap12">
       <span class="label">Tipo di gara</span>
       <div class="seg" id="seg-mode">
@@ -383,13 +412,28 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
       <div id="opt-hands" hidden>
         <div class="field">
           <label>Numero di smazzate</label>
-          <input type="number" id="s-hands" value="8" min="1" max="200" inputmode="numeric">
+          <input type="number" id="s-hands" value="3" min="1" max="200" inputmode="numeric">
         </div>
       </div>
     </div>
 
     <button class="btn btn-p btn-full" onclick="startGame()">Inizia partita</button>
   </div>
+</div>
+
+<!-- ═══ TABLE ════════════════════════════════════════════════════════════ -->
+<div id="v-table" class="view">
+  <div class="ph">
+    <button class="btn-ico btn" onclick="backFromTable()">←</button>
+    <h2>Tavolo di gioco</h2>
+  </div>
+  <div class="card stack gap12" style="margin-bottom:14px;">
+    <p style="font-size:.82rem;color:var(--fg-2);line-height:1.45;">Tocca un giocatore per selezionarlo, poi tocca un altro per scambiare la posizione. Usa il pulsante per indicare il mazziere.</p>
+    <svg id="table-svg" viewBox="0 0 300 200"></svg>
+    <div id="table-sel-info" style="font-size:.82rem;text-align:center;color:var(--fg-2);min-height:1.3em;"></div>
+    <button id="btn-set-dealer" class="btn btn-s btn-full btn-sm" onclick="setDealer()" disabled>👑 Segna come mazziere</button>
+  </div>
+  <button class="btn btn-p btn-full" onclick="goFromTableToGame()">Inizia partita →</button>
 </div>
 
 <!-- ═══ GAME ══════════════════════════════════════════════════════════════ -->
@@ -610,7 +654,7 @@ function goSetup() {
   setPl(2);
   setMode('score');
   document.getElementById('s-target').value = '2005';
-  document.getElementById('s-hands').value = '8';
+  document.getElementById('s-hands').value = '3';
   showV('setup');
 }
 
@@ -622,6 +666,7 @@ function setPl(n) {
   if (sMode === 'score') {
     document.getElementById('s-target').value = (n * 2 >= 6) ? 3005 : 2005;
   }
+  renderNameInputs(n);
 }
 
 function setMode(m) {
@@ -637,19 +682,45 @@ function startGame() {
   const nA = (document.getElementById('s-na').value.trim() || 'Squadra A').slice(0, 18);
   const nB = (document.getElementById('s-nb').value.trim() || 'Squadra B').slice(0, 18);
   const tScore = parseInt(document.getElementById('s-target').value) || 2005;
-  const tHands = parseInt(document.getElementById('s-hands').value) || 8;
+  const tHands = parseInt(document.getElementById('s-hands').value) || 3;
+
+  // Collect player names from inputs
+  const pA = [], pB = [];
+  for (let i = 0; i < sPl; i++) {
+    const inA = document.getElementById('pna' + i);
+    const inB = document.getElementById('pnb' + i);
+    const nma = (inA && inA.value.trim()) ? inA.value.trim().slice(0, 20)
+              : (sPl === 1 ? nA : nA + ' ' + (i + 1));
+    const nmb = (inB && inB.value.trim()) ? inB.value.trim().slice(0, 20)
+              : (sPl === 1 ? nB : nB + ' ' + (i + 1));
+    pA.push(nma);
+    pB.push(nmb);
+  }
+  pA.concat(pB).forEach(saveNameToHistory);
+
+  // Interleaved seating: A1, B1, A2, B2, ...
+  const players = [];
+  for (let i = 0; i < sPl; i++) {
+    players.push({ name: pA[i], team: 'A' });
+    players.push({ name: pB[i], team: 'B' });
+  }
+
   G = {
     startedAt: new Date().toISOString(),
     nA, nB,
+    playersA: pA,
+    playersB: pB,
+    players,
+    dealer: 0,
     playersPerTeam: sPl,
     mode: sMode,
     tScore, tHands,
     hands: [],
     totA: 0, totB: 0
   };
-  save();
-  renderGame();
-  showV('game');
+  // Don't save yet — user finalises seating/dealer on table view
+  renderTableView();
+  showV('table');
 }
 
 // ── Game ──────────────────────────────────────────────────────────────────────
@@ -658,9 +729,11 @@ function renderGame() {
   const n = G.hands.length;
 
   document.getElementById('g-title').textContent = G.nA + ' vs ' + G.nB;
-  document.getElementById('g-sub').textContent = G.mode === 'score'
+  const dealerSuffix = (G.players && G.players.length > 0 && G.dealer != null)
+    ? ' · 👑 ' + G.players[G.dealer].name : '';
+  document.getElementById('g-sub').textContent = (G.mode === 'score'
     ? 'Smazzata ' + (n + 1) + ' · obiettivo ' + fmt(G.tScore) + ' pt'
-    : 'Smazzata ' + (n + 1) + ' di ' + G.tHands;
+    : 'Smazzata ' + (n + 1) + ' di ' + G.tHands) + dealerSuffix;
 
   document.getElementById('g-na').textContent = G.nA;
   document.getElementById('g-nb').textContent = G.nB;
@@ -754,6 +827,9 @@ function submitHand() {
   G.hands.push({ bA, cA, bB, cB, a, b });
   G.totA += a;
   G.totB += b;
+  if (G.players && G.players.length > 0) {
+    G.dealer = (G.dealer + 1) % G.players.length;
+  }
   save();
   closeHand();
 
@@ -804,6 +880,8 @@ function finishGame() {
   H.unshift({
     date: G.startedAt,
     nA: G.nA, nB: G.nB,
+    playersA: G.playersA || [],
+    playersB: G.playersB || [],
     tA: G.totA, tB: G.totB,
     vpA: vA, vpB: vB,
     n: G.hands.length
@@ -886,6 +964,214 @@ function clearHistory() {
 function fmt(n)    { return n.toLocaleString('it-IT'); }
 function signed(n) { return (n >= 0 ? '+' : '') + fmt(n); }
 
+// ── Player names persistence ──────────────────────────────────────────────────
+function loadNames() {
+  try { return JSON.parse(localStorage.getItem('bNames') || '[]'); }
+  catch(e) { return []; }
+}
+
+function saveNameToHistory(name) {
+  if (!name || !name.trim()) return;
+  name = name.trim();
+  let names = loadNames();
+  names = [name, ...names.filter(n => n !== name)].slice(0, 60);
+  try { localStorage.setItem('bNames', JSON.stringify(names)); } catch(e) {}
+}
+
+function renderNameInputs(n) {
+  const card = document.getElementById('player-names-card');
+  const grid = document.getElementById('pname-grid');
+  if (!card || !grid) return;
+  card.style.display = '';
+  grid.innerHTML = '';
+  const colA = document.createElement('div');
+  const colB = document.createElement('div');
+  colA.innerHTML = '<div class="pname-col-hdr a-hdr">Squadra A</div>';
+  colB.innerHTML = '<div class="pname-col-hdr b-hdr">Squadra B</div>';
+  for (let i = 0; i < n; i++) {
+    colA.appendChild(makeNameField('pna' + i, i + 1));
+    colB.appendChild(makeNameField('pnb' + i, i + 1));
+  }
+  grid.appendChild(colA);
+  grid.appendChild(colB);
+}
+
+function makeNameField(id, num) {
+  const wrap = document.createElement('div');
+  wrap.className = 'pname-field';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.id = id;
+  inp.placeholder = 'Giocatore ' + num;
+  inp.maxLength = 20;
+  inp.autocomplete = 'off';
+  const drop = document.createElement('div');
+  drop.className = 'pname-drop';
+  drop.id = id + '-drop';
+  inp.addEventListener('focus', () => refreshNameDrop(inp, drop));
+  inp.addEventListener('input', () => refreshNameDrop(inp, drop));
+  inp.addEventListener('blur', () => setTimeout(() => drop.classList.remove('open'), 200));
+  wrap.appendChild(inp);
+  wrap.appendChild(drop);
+  return wrap;
+}
+
+function refreshNameDrop(inp, drop) {
+  const val = (inp.value || '').toLowerCase();
+  const names = loadNames().filter(n => n.toLowerCase().includes(val)).slice(0, 12);
+  if (!names.length) { drop.classList.remove('open'); return; }
+  drop.innerHTML = '';
+  names.forEach(name => {
+    const item = document.createElement('div');
+    item.className = 'pname-drop-item';
+    item.textContent = name;
+    item.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      inp.value = name;
+      drop.classList.remove('open');
+    });
+    drop.appendChild(item);
+  });
+  drop.classList.add('open');
+}
+
+// ── Table view ────────────────────────────────────────────────────────────────
+let tableSelected = null;
+
+function renderTableView() {
+  tableSelected = null;
+  drawTableSVG();
+  updateTableUI();
+}
+
+function drawTableSVG() {
+  const svg = document.getElementById('table-svg');
+  if (!svg || !G) return;
+  svg.innerHTML = '';
+  const ns = 'http://www.w3.org/2000/svg';
+  const n = G.players.length;
+  const cx = 150, cy = 100, rx = 108, ry = 65;
+
+  function mkEl(tag, attrs) {
+    const e = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, String(v)));
+    return e;
+  }
+  function mkTxt(content, attrs) {
+    const e = document.createElementNS(ns, 'text');
+    e.textContent = content;
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, String(v)));
+    return e;
+  }
+
+  // Green felt
+  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: '#1e6b38', opacity: '0.18' }));
+  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: 'none', stroke: '#1e6b38', 'stroke-width': '1.5', opacity: '0.35' }));
+
+  G.players.forEach((player, i) => {
+    const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const px = cx + rx * Math.cos(angle);
+    const py = cy + ry * Math.sin(angle);
+    const isSelected = i === tableSelected;
+    const isDealer = i === G.dealer;
+    const teamClr = player.team === 'A' ? 'var(--a)' : 'var(--b)';
+
+    const g = document.createElementNS(ns, 'g');
+    g.setAttribute('transform', `translate(${px.toFixed(1)},${py.toFixed(1)})`);
+    g.style.cursor = 'pointer';
+
+    // Seat background
+    g.appendChild(mkEl('circle', {
+      r: 23,
+      fill: isSelected ? 'var(--a-bg)' : 'var(--surface)',
+      stroke: isSelected ? 'var(--a)' : teamClr,
+      'stroke-width': isSelected ? 3 : 1.5
+    }));
+
+    // Player name (move up slightly if dealer, to leave room for crown)
+    const nameShort = player.name.length > 7 ? player.name.slice(0, 6) + '…' : player.name;
+    g.appendChild(mkTxt(nameShort, {
+      'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      y: isDealer ? -5 : 0,
+      'font-size': 8.5, 'font-family': 'system-ui,sans-serif',
+      fill: 'var(--fg)', 'pointer-events': 'none'
+    }));
+
+    // Crown emoji for dealer
+    if (isDealer) {
+      g.appendChild(mkTxt('♛', {
+        'text-anchor': 'middle', 'dominant-baseline': 'middle',
+        y: 9, 'font-size': 9, fill: '#c8970a', 'pointer-events': 'none'
+      }));
+    }
+
+    // Team label (tiny, below)
+    g.appendChild(mkTxt(player.team, {
+      'text-anchor': 'middle', y: isDealer ? 19 : 14,
+      'font-size': 6.5, 'font-family': 'system-ui,sans-serif',
+      fill: teamClr, 'font-weight': 700, 'pointer-events': 'none'
+    }));
+
+    // Transparent hit area
+    g.appendChild(mkEl('circle', { r: 27, fill: 'transparent' }));
+
+    g.addEventListener('click', () => handleSeatTap(i));
+    svg.appendChild(g);
+  });
+}
+
+function handleSeatTap(idx) {
+  if (tableSelected === null) {
+    tableSelected = idx;
+  } else if (tableSelected === idx) {
+    tableSelected = null;
+  } else {
+    // Swap positions
+    const a = tableSelected, b = idx;
+    [G.players[a], G.players[b]] = [G.players[b], G.players[a]];
+    if (G.dealer === a) G.dealer = b;
+    else if (G.dealer === b) G.dealer = a;
+    tableSelected = null;
+  }
+  drawTableSVG();
+  updateTableUI();
+}
+
+function updateTableUI() {
+  const info = document.getElementById('table-sel-info');
+  const btn  = document.getElementById('btn-set-dealer');
+  if (!info || !btn) return;
+  if (tableSelected === null) {
+    info.textContent = 'Tocca un giocatore per selezionarlo';
+    btn.disabled = true;
+    btn.textContent = '👑 Segna come mazziere';
+  } else {
+    const p = G.players[tableSelected];
+    info.textContent = p.name + ' selezionato — tocca un altro per scambiare';
+    btn.disabled = false;
+    btn.textContent = '👑 ' + p.name + ' è il mazziere';
+  }
+}
+
+function setDealer() {
+  if (tableSelected === null) return;
+  G.dealer = tableSelected;
+  tableSelected = null;
+  drawTableSVG();
+  updateTableUI();
+}
+
+function backFromTable() {
+  load(); // restore any previously saved in-progress game
+  showV('setup');
+}
+
+function goFromTableToGame() {
+  save(); // now save, with seating and dealer confirmed
+  renderGame();
+  showV('game');
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 load();
 renderHome();
@@ -950,7 +1236,7 @@ if ('serviceWorker' in navigator) {
         }
       });
     });
-    setInterval(() => reg.update(), 30 * 60 * 1000);
+    setInterval(() => reg.update(), 30 * 1000);
   });
 }
 
