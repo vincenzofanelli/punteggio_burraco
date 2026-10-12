@@ -337,8 +337,8 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     " title="Chiudi">✕</button>
   </div>
 
-  <button class="btn btn-p btn-full mt8" onclick="goSetup()">+ Nuova partita</button>
-  <button class="btn btn-s btn-full" style="margin-top:8px;" onclick="showHistory()">📋 Storico partite</button>
+  <button class="btn btn-p btn-full mt8 home-action-btn" onclick="goSetup()">+ Nuova partita</button>
+  <button class="btn btn-s btn-full home-action-btn" style="margin-top:8px;" onclick="showHistory()">📋 Storico partite</button>
 
   <div id="resume-banner" hidden class="banner stack gap8" style="margin-top:12px;">
     <div>
@@ -431,7 +431,7 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     <div id="table-sel-info" style="font-size:.82rem;text-align:center;color:var(--fg-2);min-height:1.3em;"></div>
     <button id="btn-set-dealer" class="btn btn-s btn-full btn-sm" onclick="setDealer()" disabled>👑 Segna come mazziere</button>
   </div>
-  <button class="btn btn-p btn-full" onclick="goFromTableToGame()">Inizia partita →</button>
+  <button id="btn-go-game" class="btn btn-p btn-full" onclick="goFromTableToGame()">Inizia partita →</button>
 </div>
 
 <!-- ═══ GAME ══════════════════════════════════════════════════════════════ -->
@@ -645,6 +645,18 @@ function showV(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('v-' + id).classList.add('active');
   window.scrollTo(0, 0);
+  if (id === 'home') equalizeHomeHeights();
+}
+
+function equalizeHomeHeights() {
+  const banner = document.getElementById('resume-banner');
+  const btns = document.querySelectorAll('.home-action-btn');
+  if (!banner.hidden) {
+    const h = banner.offsetHeight;
+    if (h > 0) btns.forEach(b => { b.style.minHeight = h + 'px'; });
+  } else {
+    btns.forEach(b => { b.style.minHeight = ''; });
+  }
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -932,7 +944,16 @@ function doAbandon() {
   showV('home');
 }
 
-function resumeGame() { renderGame(); showV('game'); }
+function resumeGame() {
+  if (G && G.players && G.players.length > 0) {
+    resumingGame = true;
+    renderTableView();
+    showV('table');
+  } else {
+    renderGame();
+    showV('game');
+  }
+}
 
 // ── Home ──────────────────────────────────────────────────────────────────────
 function renderHome() {
@@ -1073,11 +1094,14 @@ function refreshNameDrop(inp, drop) {
 
 // ── Table view ────────────────────────────────────────────────────────────────
 let tableSelected = null;
+let resumingGame = false;
 
 function renderTableView() {
   tableSelected = null;
   drawTableSVG();
   updateTableUI();
+  const goBtn = document.getElementById('btn-go-game');
+  if (goBtn) goBtn.textContent = resumingGame ? 'Riprendi partita →' : 'Inizia partita →';
 }
 
 function drawTableSVG() {
@@ -1118,18 +1142,18 @@ function drawTableSVG() {
 
     // Seat background
     g.appendChild(mkEl('circle', {
-      r: 23,
+      r: 25,
       fill: isSelected ? 'var(--a-bg)' : 'var(--surface)',
       stroke: isSelected ? 'var(--a)' : teamClr,
       'stroke-width': isSelected ? 3 : 1.5
     }));
 
     // Player name (move up slightly if dealer, to leave room for crown)
-    const nameShort = player.name.length > 7 ? player.name.slice(0, 6) + '…' : player.name;
+    const nameShort = player.name.length > 9 ? player.name.slice(0, 8) + '…' : player.name;
     g.appendChild(mkTxt(nameShort, {
       'text-anchor': 'middle', 'dominant-baseline': 'middle',
-      y: isDealer ? -5 : 0,
-      'font-size': 8.5, 'font-family': 'system-ui,sans-serif',
+      y: isDealer ? -6 : 0,
+      'font-size': 10, 'font-family': 'system-ui,sans-serif',
       fill: 'var(--fg)', 'pointer-events': 'none'
     }));
 
@@ -1137,19 +1161,19 @@ function drawTableSVG() {
     if (isDealer) {
       g.appendChild(mkTxt('♛', {
         'text-anchor': 'middle', 'dominant-baseline': 'middle',
-        y: 9, 'font-size': 9, fill: '#c8970a', 'pointer-events': 'none'
+        y: 10, 'font-size': 10, fill: '#c8970a', 'pointer-events': 'none'
       }));
     }
 
     // Team label (tiny, below)
     g.appendChild(mkTxt(player.team, {
-      'text-anchor': 'middle', y: isDealer ? 19 : 14,
+      'text-anchor': 'middle', y: isDealer ? 21 : 16,
       'font-size': 6.5, 'font-family': 'system-ui,sans-serif',
       fill: teamClr, 'font-weight': 700, 'pointer-events': 'none'
     }));
 
     // Hit area — explicit onclick so mobile tap fires on both first and second tap
-    const hit = mkEl('circle', { r: 27, fill: 'rgba(0,0,0,.001)', style: 'cursor:pointer' });
+    const hit = mkEl('circle', { r: 29, fill: 'rgba(0,0,0,.001)', style: 'cursor:pointer' });
     hit.setAttribute('onclick', 'handleSeatTap(' + i + ')');
     g.appendChild(hit);
 
@@ -1199,11 +1223,17 @@ function setDealer() {
 }
 
 function backFromTable() {
-  load(); // restore any previously saved in-progress game
-  showV('setup');
+  if (resumingGame) {
+    resumingGame = false;
+    showV('home');
+  } else {
+    load(); // restore any previously saved in-progress game
+    showV('setup');
+  }
 }
 
 function goFromTableToGame() {
+  resumingGame = false;
   save(); // now save, with seating and dealer confirmed
   renderGame();
   showV('game');
@@ -1212,6 +1242,7 @@ function goFromTableToGame() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 load();
 renderHome();
+equalizeHomeHeights();
 </script>
 
 <script>
