@@ -275,11 +275,32 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .hist-scores { font-size: .875rem; display: flex; gap: 8px; align-items: center; }
 .win-emoji { font-size: 1.1rem; line-height: 1; }
 
-/* ── Resume banner ─────────────────────────── */
+/* ── Resume banner (dealer bar nel gioco) ──── */
 .banner {
   background: var(--a-bg); border: 1.5px solid var(--a);
   border-radius: var(--radius-s); padding: 14px;
 }
+
+/* ── Home tiles ─────────────────────────────── */
+.home-tile-wrap { display: flex; flex-direction: column; gap: 8px; }
+.home-tile {
+  width: 100%; min-height: 68px;
+  display: flex; align-items: center;
+  padding: 14px 16px; border-radius: var(--radius-s);
+  font-size: .9375rem; font-weight: 600; text-align: left;
+}
+button.home-tile { cursor: pointer; justify-content: flex-start; }
+.resume-tile {
+  background: var(--a-bg); border: 1.5px solid var(--a);
+  justify-content: space-between; gap: 12px;
+}
+.resume-info-col { flex: 1; min-width: 0; }
+.resume-info-col .resume-title { font-weight: 600; font-size: .9375rem; }
+.resume-info-col .resume-sub {
+  font-size: .8rem; color: var(--fg-2); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.resume-btns { display: flex; gap: 6px; flex-shrink: 0; }
 
 /* ── Page header ───────────────────────────── */
 .ph { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
@@ -337,21 +358,22 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     " title="Chiudi">✕</button>
   </div>
 
-  <button class="btn btn-p btn-full mt8 home-action-btn" onclick="goSetup()">+ Nuova partita</button>
-  <button class="btn btn-s btn-full home-action-btn" style="margin-top:8px;" onclick="showHistory()">📋 Storico partite</button>
-
-  <div id="resume-banner" hidden class="banner stack gap8" style="margin-top:12px;">
-    <div>
-      <div style="font-weight:600;font-size:.9375rem;">Partita in corso</div>
-      <div id="resume-info" style="font-size:.8125rem;color:var(--fg-2);margin-top:2px;"></div>
-    </div>
-    <div class="row gap8">
-      <button class="btn btn-resume grow" onclick="resumeGame()">Riprendi</button>
-      <button class="btn btn-s grow" onclick="reqAbandon()">Abbandona</button>
+  <div class="home-tile-wrap mt8">
+    <button class="btn btn-p home-tile" onclick="goSetup()">+ Nuova partita</button>
+    <button class="btn btn-s home-tile" onclick="showHistory()">📋 Storico partite</button>
+    <div id="resume-banner" hidden class="home-tile resume-tile">
+      <div class="resume-info-col">
+        <div class="resume-title">Partita in corso</div>
+        <div id="resume-info" class="resume-sub"></div>
+      </div>
+      <div class="resume-btns">
+        <button class="btn btn-resume btn-sm" onclick="resumeGame()">Riprendi</button>
+        <button class="btn btn-s btn-sm" onclick="reqAbandon()">Abbandona</button>
+      </div>
     </div>
   </div>
 
-  <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:16px;font-size:.82rem;">🔄 Aggiorna app</button>
+  <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:32px;font-size:.82rem;">🔄 Aggiorna app</button>
 </div>
 
 <!-- ═══ HISTORY ══════════════════════════════════════════════════════════ -->
@@ -645,18 +667,6 @@ function showV(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('v-' + id).classList.add('active');
   window.scrollTo(0, 0);
-  if (id === 'home') equalizeHomeHeights();
-}
-
-function equalizeHomeHeights() {
-  const banner = document.getElementById('resume-banner');
-  const btns = document.querySelectorAll('.home-action-btn');
-  if (!banner.hidden) {
-    const h = banner.offsetHeight;
-    if (h > 0) btns.forEach(b => { b.style.minHeight = h + 'px'; });
-  } else {
-    btns.forEach(b => { b.style.minHeight = ''; });
-  }
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -1242,7 +1252,6 @@ function goFromTableToGame() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 load();
 renderHome();
-equalizeHomeHeights();
 </script>
 
 <script>
