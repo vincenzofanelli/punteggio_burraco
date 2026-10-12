@@ -338,6 +338,7 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   </div>
 
   <button class="btn btn-p btn-full mt8" onclick="goSetup()">+ Nuova partita</button>
+  <button class="btn btn-s btn-full" style="margin-top:8px;" onclick="showHistory()">📋 Storico partite</button>
 
   <div id="resume-banner" hidden class="banner stack gap8" style="margin-top:12px;">
     <div>
@@ -350,15 +351,19 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     </div>
   </div>
 
-  <div class="row spread mt20" style="margin-bottom:10px;">
-    <span class="label">Ultime partite</span>
-    <button id="btn-clear" class="btn btn-sm btn-s" onclick="clearHistory()" hidden>Cancella storico</button>
+  <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:16px;font-size:.82rem;">🔄 Aggiorna app</button>
+</div>
+
+<!-- ═══ HISTORY ══════════════════════════════════════════════════════════ -->
+<div id="v-history" class="view">
+  <div class="ph">
+    <button class="btn-ico btn" onclick="showV('home')">←</button>
+    <h2>Storico partite</h2>
+    <button id="btn-clear" class="btn btn-sm btn-s" onclick="clearHistory()" hidden>Cancella</button>
   </div>
   <div id="hist-card" class="card">
     <div class="empty">Nessuna partita salvata</div>
   </div>
-
-  <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:16px;font-size:.82rem;">🔄 Aggiorna app</button>
 </div>
 
 <!-- ═══ SETUP ═══════════════════════════════════════════════════════════ -->
@@ -370,17 +375,6 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
 
   <div class="stack gap12">
     <div class="card stack gap12">
-      <span class="label">Nomi squadre</span>
-      <div class="score-grid">
-        <div class="field">
-          <label><span class="dot dot-a"></span>Squadra A</label>
-          <input type="text" id="s-na" value="Squadra A" maxlength="18" onfocus="this.select()">
-        </div>
-        <div class="field">
-          <label><span class="dot dot-b"></span>Squadra B</label>
-          <input type="text" id="s-nb" value="Squadra B" maxlength="18" onfocus="this.select()">
-        </div>
-      </div>
       <div class="field">
         <label>Giocatori per squadra</label>
         <div class="seg" id="seg-pl">
@@ -395,6 +389,10 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     <div id="player-names-card" class="card stack gap8" style="display:none;">
       <span class="label">Nomi giocatori</span>
       <div class="pname-grid" id="pname-grid"></div>
+    </div>
+
+    <div id="pname-error" style="display:none;background:var(--b-bg);border:1.5px solid var(--b);border-radius:var(--radius-s);padding:10px 14px;font-size:.875rem;color:var(--b);">
+      ⚠️ Inserisci il nome di tutti i giocatori prima di iniziare
     </div>
 
     <div class="card stack gap12">
@@ -445,6 +443,11 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
       <div id="g-sub" style="font-size:.8rem;color:var(--fg-2);"></div>
     </div>
     <button class="btn btn-sm btn-s" onclick="endGame()">Fine gara</button>
+  </div>
+
+  <div id="g-dealer-bar" class="banner" style="margin-bottom:12px;text-align:center;" hidden>
+    <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-2);margin-bottom:3px;">👑 Mazziere</div>
+    <div id="g-dealer-name" style="font-size:1.15rem;font-weight:700;"></div>
   </div>
 
   <div class="score-grid" style="margin-bottom:12px;">
@@ -648,9 +651,8 @@ function showV(id) {
 let sPl = 2, sMode = 'score';
 
 function goSetup() {
-  // reset fields
-  document.getElementById('s-na').value = 'Squadra A';
-  document.getElementById('s-nb').value = 'Squadra B';
+  const errEl = document.getElementById('pname-error');
+  if (errEl) errEl.style.display = 'none';
   setPl(2);
   setMode('score');
   document.getElementById('s-target').value = '2005';
@@ -679,23 +681,39 @@ function setMode(m) {
 }
 
 function startGame() {
-  const nA = (document.getElementById('s-na').value.trim() || 'Squadra A').slice(0, 18);
-  const nB = (document.getElementById('s-nb').value.trim() || 'Squadra B').slice(0, 18);
   const tScore = parseInt(document.getElementById('s-target').value) || 2005;
   const tHands = parseInt(document.getElementById('s-hands').value) || 3;
+  const errEl  = document.getElementById('pname-error');
 
-  // Collect player names from inputs
+  // Collect and validate player names
   const pA = [], pB = [];
+  let valid = true;
   for (let i = 0; i < sPl; i++) {
     const inA = document.getElementById('pna' + i);
     const inB = document.getElementById('pnb' + i);
-    const nma = (inA && inA.value.trim()) ? inA.value.trim().slice(0, 20)
-              : (sPl === 1 ? nA : nA + ' ' + (i + 1));
-    const nmb = (inB && inB.value.trim()) ? inB.value.trim().slice(0, 20)
-              : (sPl === 1 ? nB : nB + ' ' + (i + 1));
-    pA.push(nma);
-    pB.push(nmb);
+    const nma = inA ? inA.value.trim() : '';
+    const nmb = inB ? inB.value.trim() : '';
+    if (!nma) { valid = false; if (inA) inA.style.borderColor = 'var(--b)'; }
+    else       { if (inA) inA.style.borderColor = ''; }
+    if (!nmb) { valid = false; if (inB) inB.style.borderColor = 'var(--b)'; }
+    else       { if (inB) inB.style.borderColor = ''; }
+    pA.push(nma.slice(0, 20));
+    pB.push(nmb.slice(0, 20));
   }
+  if (!valid) {
+    if (errEl) errEl.style.display = '';
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+
+  // Auto-generate team names from initials
+  const nA = pA.length === 1
+    ? pA[0]
+    : pA.map(n => n.charAt(0).toUpperCase()).join('-');
+  const nB = pB.length === 1
+    ? pB[0]
+    : pB.map(n => n.charAt(0).toUpperCase()).join('-');
+
   pA.concat(pB).forEach(saveNameToHistory);
 
   // Interleaved seating: A1, B1, A2, B2, ...
@@ -729,11 +747,18 @@ function renderGame() {
   const n = G.hands.length;
 
   document.getElementById('g-title').textContent = G.nA + ' vs ' + G.nB;
-  const dealerSuffix = (G.players && G.players.length > 0 && G.dealer != null)
-    ? ' · 👑 ' + G.players[G.dealer].name : '';
-  document.getElementById('g-sub').textContent = (G.mode === 'score'
+  document.getElementById('g-sub').textContent = G.mode === 'score'
     ? 'Smazzata ' + (n + 1) + ' · obiettivo ' + fmt(G.tScore) + ' pt'
-    : 'Smazzata ' + (n + 1) + ' di ' + G.tHands) + dealerSuffix;
+    : 'Smazzata ' + (n + 1) + ' di ' + G.tHands;
+
+  const dealerBar  = document.getElementById('g-dealer-bar');
+  const dealerName = document.getElementById('g-dealer-name');
+  if (G.players && G.players.length > 0 && G.dealer != null) {
+    dealerName.textContent = G.players[G.dealer].name;
+    dealerBar.hidden = false;
+  } else {
+    dealerBar.hidden = true;
+  }
 
   document.getElementById('g-na').textContent = G.nA;
   document.getElementById('g-nb').textContent = G.nB;
@@ -917,14 +942,25 @@ function renderHome() {
     const d = new Date(G.startedAt);
     const ds = d.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
     const ts = d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
+    const scoreTxt = G.hands.length > 0 ? ' · ' + fmt(G.totA) + '–' + fmt(G.totB) : '';
+    const dealerTxt = (G.players && G.players.length && G.dealer != null)
+      ? ' · 👑 ' + G.players[G.dealer].name : '';
     document.getElementById('resume-info').textContent =
-      `${G.nA} vs ${G.nB} · ${ds} ${ts} · ${G.hands.length} smazzate`;
+      `${G.nA} vs ${G.nB} · ${ds} ${ts}${scoreTxt} · ${G.hands.length} smazzate${dealerTxt}`;
   } else {
     banner.hidden = true;
   }
+}
 
+function showHistory() {
+  renderHistory();
+  showV('history');
+}
+
+function renderHistory() {
   const card = document.getElementById('hist-card');
   const clr  = document.getElementById('btn-clear');
+  if (!card || !clr) return;
   if (!H.length) {
     card.innerHTML = '<div class="empty">Nessuna partita salvata</div>';
     clr.hidden = true;
@@ -957,7 +993,7 @@ function renderHome() {
 function clearHistory() {
   H = [];
   save();
-  renderHome();
+  renderHistory();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1112,10 +1148,11 @@ function drawTableSVG() {
       fill: teamClr, 'font-weight': 700, 'pointer-events': 'none'
     }));
 
-    // Transparent hit area
-    g.appendChild(mkEl('circle', { r: 27, fill: 'transparent' }));
+    // Hit area — explicit onclick so mobile tap fires on both first and second tap
+    const hit = mkEl('circle', { r: 27, fill: 'rgba(0,0,0,.001)', style: 'cursor:pointer' });
+    hit.setAttribute('onclick', 'handleSeatTap(' + i + ')');
+    g.appendChild(hit);
 
-    g.addEventListener('click', () => handleSeatTap(i));
     svg.appendChild(g);
   });
 }
