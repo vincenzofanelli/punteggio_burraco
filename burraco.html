@@ -442,11 +442,12 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
 <!-- ═══ GAME ══════════════════════════════════════════════════════════════ -->
 <div id="v-game" class="view">
   <div class="ph">
-    <button class="btn-ico btn" onclick="reqAbandon()">←</button>
+    <button class="btn-ico btn" onclick="showV('home')">←</button>
     <div class="grow stack gap4">
       <div id="g-title" style="font-weight:700;font-size:.9375rem;"></div>
       <div id="g-sub" style="font-size:.8rem;color:var(--fg-2);"></div>
     </div>
+    <button class="btn btn-sm btn-warn" onclick="reqAbandon()">Sospendi</button>
     <button class="btn btn-sm btn-s" onclick="endGame()">Fine gara</button>
   </div>
 
@@ -967,18 +968,13 @@ function doSuspend() {
   showV('home');
 }
 
-function resumeFromHistory(idx) {
-  const r = H[idx];
+function resumeFromHistory(startedAt) {
+  const r = H.find(entry => entry.startedAt === startedAt);
   if (!r || !r.suspended) return;
   // Se c'è una partita attiva, sospendila prima
   if (G) {
     if (!confirm('C\'è una partita in corso. Sospenderla per riprendere questa?')) return;
     doSuspend();
-    // doSuspend ha già modificato H e G, ricalcola idx
-    const newIdx = H.findIndex(entry => entry.startedAt === r.startedAt);
-    if (newIdx < 0) return;
-    resumeFromHistory(newIdx);
-    return;
   }
   // Carica la partita sospesa in G
   G = {
@@ -996,7 +992,7 @@ function resumeFromHistory(idx) {
     totA: r.tA, totB: r.tB
   };
   // Rimuove dallo storico — ci tornerà quando sospesa/conclusa di nuovo
-  H.splice(H.findIndex(entry => entry.startedAt === r.startedAt), 1);
+  H = H.filter(entry => entry.startedAt !== startedAt);
   save();
   // Mostra il tavolo per rivedere posizioni e mazziere
   resumingGame = true;
@@ -1026,6 +1022,12 @@ function showHistory() {
   showV('history');
 }
 
+function deleteHistoryEntry(startedAt) {
+  H = H.filter(r => r.startedAt !== startedAt);
+  save();
+  renderHistory();
+}
+
 function renderHistory() {
   const card = document.getElementById('hist-card');
   const clr  = document.getElementById('btn-clear');
@@ -1037,27 +1039,29 @@ function renderHistory() {
   }
   clr.hidden = false;
   card.innerHTML = '';
-  H.forEach((r, idx) => {
+  H.forEach(r => {
+    const key = r.startedAt; // chiave stabile, non indice
     const d  = new Date(r.date);
     const ds = d.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'2-digit' });
     const ts = d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
     const wA = r.tA > r.tB, wB = r.tB > r.tA;
     const isSuspended = !!r.suspended;
-    const item = document.createElement('div');
-    item.className = 'hist-item';
-    if (isSuspended) item.style.cursor = 'pointer';
 
     const dealerName = (r.players && r.players.length && r.dealer != null)
       ? r.players[r.dealer].name : '';
 
+    const item = document.createElement('div');
+    item.className = 'hist-item';
+    item.style.position = 'relative';
+
     item.innerHTML = `
-      <div class="hist-meta" style="display:flex;align-items:center;gap:6px;">
+      <div class="hist-meta" style="display:flex;align-items:center;gap:6px;padding-right:32px;">
         ${isSuspended
           ? '<span style="background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bdr);border-radius:4px;padding:1px 6px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Sospesa</span>'
           : ''}
         <span>${ds} ${ts} · ${r.n} smazzate${!isSuspended ? ' · VP ' + r.vpA + '–' + r.vpB : ''}${dealerName ? ' · 👑 ' + dealerName : ''}</span>
       </div>
-      <div class="hist-scores" style="margin-top:4px;">
+      <div class="hist-scores" style="margin-top:4px;padding-right:32px;">
         <span class="num" style="color:var(--a);">${fmt(r.tA)}</span>
         <span style="color:var(--a);font-weight:600;margin-left:2px;">${r.nA}</span>
         ${wA && !isSuspended ? '<span class="win-emoji">😊</span>' : ''}
@@ -1068,8 +1072,19 @@ function renderHistory() {
       </div>
       ${isSuspended ? '<div style="font-size:.72rem;color:var(--a);margin-top:5px;font-weight:600;">▶ Tocca per riprendere</div>' : ''}`;
 
+    // Pulsante cestino
+    const del = document.createElement('button');
+    del.textContent = '🗑';
+    del.style.cssText = 'position:absolute;top:10px;right:0;background:none;border:none;font-size:1rem;cursor:pointer;padding:4px;color:var(--fg-3);';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      if (confirm('Eliminare questa partita?')) deleteHistoryEntry(key);
+    });
+    item.appendChild(del);
+
     if (isSuspended) {
-      item.addEventListener('click', () => resumeFromHistory(idx));
+      item.style.cursor = 'pointer';
+      item.addEventListener('click', () => resumeFromHistory(key));
     }
     card.appendChild(item);
   });
