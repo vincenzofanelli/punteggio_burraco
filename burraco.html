@@ -364,7 +364,6 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   <div class="ph">
     <button class="btn-ico btn" onclick="showV('home')">←</button>
     <h2>Storico partite</h2>
-    <button id="btn-clear" class="btn btn-sm btn-s" onclick="clearHistory()" hidden>Cancella</button>
   </div>
   <div id="hist-card" class="card">
     <div class="empty">Nessuna partita salvata</div>
@@ -642,7 +641,11 @@ function load() {
     const g = localStorage.getItem('bG');
     const h = localStorage.getItem('bH');
     if (g) G = JSON.parse(g);
-    if (h) H = JSON.parse(h);
+    if (h) {
+      H = JSON.parse(h);
+      // Garantisce ordine dalla più recente alla più vecchia
+      H.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
   } catch(e) {}
 }
 
@@ -719,6 +722,36 @@ function startGame() {
   const nB = pB.length === 1
     ? pB[0]
     : pB.map(n => n.charAt(0).toUpperCase()).join('-');
+
+  // Se c'è una partita in corso, sospendila prima di iniziarne una nuova
+  if (G) {
+    const [vA, vB] = calcVP(G.totA, G.totB);
+    const existIdx = H.findIndex(r => r.startedAt === G.startedAt);
+    const entry = {
+      startedAt: G.startedAt,
+      date: new Date().toISOString(),
+      suspended: true,
+      nA: G.nA, nB: G.nB,
+      playersA: G.playersA || [],
+      playersB: G.playersB || [],
+      players: G.players || [],
+      dealer: G.dealer ?? 0,
+      playersPerTeam: G.playersPerTeam || 1,
+      mode: G.mode,
+      tScore: G.tScore,
+      tHands: G.tHands,
+      hands: G.hands,
+      tA: G.totA, tB: G.totB,
+      vpA: vA, vpB: vB,
+      n: G.hands.length
+    };
+    if (existIdx >= 0) H.splice(existIdx, 1);
+    H.unshift(entry);
+    H.sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (H.length > 20) H = H.slice(0, 20);
+    G = null;
+    save();
+  }
 
   pA.concat(pB).forEach(saveNameToHistory);
 
@@ -1030,14 +1063,11 @@ function deleteHistoryEntry(startedAt) {
 
 function renderHistory() {
   const card = document.getElementById('hist-card');
-  const clr  = document.getElementById('btn-clear');
-  if (!card || !clr) return;
+  if (!card) return;
   if (!H.length) {
     card.innerHTML = '<div class="empty">Nessuna partita salvata</div>';
-    clr.hidden = true;
     return;
   }
-  clr.hidden = false;
   card.innerHTML = '';
   H.forEach(r => {
     const key = r.startedAt; // chiave stabile, non indice
@@ -1049,6 +1079,8 @@ function renderHistory() {
 
     const dealerName = (r.players && r.players.length && r.dealer != null)
       ? r.players[r.dealer].name : '';
+    const pA = (r.playersA || []).join(', ');
+    const pB = (r.playersB || []).join(', ');
 
     const item = document.createElement('div');
     item.className = 'hist-item';
@@ -1070,6 +1102,9 @@ function renderHistory() {
         <span style="color:var(--b);font-weight:600;margin-right:2px;">${r.nB}</span>
         <span class="num" style="color:var(--b);">${fmt(r.tB)}</span>
       </div>
+      ${pA || pB ? `<div style="font-size:.72rem;color:var(--fg-3);margin-top:4px;padding-right:32px;">
+        <span style="color:var(--a);">${pA}</span>${pA && pB ? ' — ' : ''}<span style="color:var(--b);">${pB}</span>
+      </div>` : ''}
       ${isSuspended ? '<div style="font-size:.72rem;color:var(--a);margin-top:5px;font-weight:600;">▶ Tocca per riprendere</div>' : ''}`;
 
     // Pulsante cestino
@@ -1090,11 +1125,6 @@ function renderHistory() {
   });
 }
 
-function clearHistory() {
-  H = [];
-  save();
-  renderHistory();
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n)    { return n.toLocaleString('it-IT'); }
