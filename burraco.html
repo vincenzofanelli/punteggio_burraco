@@ -374,6 +374,8 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   </div>
 
   <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:32px;font-size:.82rem;">🔄 Aggiorna app</button>
+  <button onclick="debugLS()" class="btn btn-s btn-full" style="margin-top:8px;font-size:.82rem;">🔍 Debug localStorage</button>
+  <pre id="debug-out" style="display:none;margin-top:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-s);padding:10px;font-size:.7rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow-y:auto;"></pre>
 </div>
 
 <!-- ═══ HISTORY ══════════════════════════════════════════════════════════ -->
@@ -1247,6 +1249,29 @@ function goFromTableToGame() {
   save(); // now save, with seating and dealer confirmed
   renderGame();
   showV('game');
+}
+
+// ── Debug localStorage ────────────────────────────────────────────────────────
+function debugLS() {
+  const out = document.getElementById('debug-out');
+  const bG = localStorage.getItem('bG');
+  const bH = localStorage.getItem('bH');
+  const bN = localStorage.getItem('bNames');
+  const lines = [
+    '=== DEBUG localStorage ===',
+    'Timestamp: ' + new Date().toLocaleString('it-IT'),
+    '',
+    '--- bG (partita in corso) ---',
+    bG ? bG : '(vuoto)',
+    '',
+    '--- bH (storico, ' + (bH ? JSON.parse(bH).length : 0) + ' voci) ---',
+    bH ? bH : '(vuoto)',
+    '',
+    '--- bNames ---',
+    bN ? bN : '(vuoto)'
+  ];
+  out.textContent = lines.join('\n');
+  out.style.display = out.style.display === 'none' ? '' : 'none';
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
