@@ -294,13 +294,6 @@ button.home-tile { cursor: pointer; justify-content: flex-start; }
   background: var(--a-bg); border: 1.5px solid var(--a);
   justify-content: space-between; gap: 12px;
 }
-.resume-info-col { flex: 1; min-width: 0; }
-.resume-info-col .resume-title { font-weight: 600; font-size: .9375rem; }
-.resume-info-col .resume-sub {
-  font-size: .8rem; color: var(--fg-2); margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.resume-btns { display: flex; gap: 6px; flex-shrink: 0; }
 
 /* ── Page header ───────────────────────────── */
 .ph { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
@@ -361,21 +354,9 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   <div class="home-tile-wrap mt8">
     <button class="btn btn-p home-tile" onclick="goSetup()">+ Nuova partita</button>
     <button class="btn btn-s home-tile" onclick="showHistory()">📋 Storico partite</button>
-    <div id="resume-banner" hidden class="home-tile resume-tile">
-      <div class="resume-info-col">
-        <div class="resume-title">Partita in corso</div>
-        <div id="resume-info" class="resume-sub"></div>
-      </div>
-      <div class="resume-btns">
-        <button class="btn btn-resume btn-sm" onclick="resumeGame()">Riprendi</button>
-        <button class="btn btn-s btn-sm" onclick="reqAbandon()">Abbandona</button>
-      </div>
-    </div>
   </div>
 
   <button id="btn-utility" class="btn btn-s btn-full" style="margin-top:32px;font-size:.82rem;">🔄 Aggiorna app</button>
-  <button onclick="debugLS()" class="btn btn-s btn-full" style="margin-top:8px;font-size:.82rem;">🔍 Debug localStorage</button>
-  <pre id="debug-out" style="display:none;margin-top:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-s);padding:10px;font-size:.7rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow-y:auto;"></pre>
 </div>
 
 <!-- ═══ HISTORY ══════════════════════════════════════════════════════════ -->
@@ -610,12 +591,12 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
 <!-- ═══ MODAL: CONFIRM ABANDON ══════════════════════════════════════════ -->
 <div id="m-abandon" class="overlay" hidden>
   <div class="modal">
-    <h2>Abbandonare la partita?</h2>
+    <h2>Sospendere la partita?</h2>
     <p style="color:var(--fg-2);margin:12px 0;font-size:.9375rem;">
-      La partita verrà eliminata e non sarà salvata nello storico.
+      La partita verrà salvata nello storico e potrai riprenderla in seguito.
     </p>
     <div class="stack gap8">
-      <button class="btn btn-d btn-full" onclick="doAbandon()">Abbandona</button>
+      <button class="btn btn-warn btn-full" onclick="doSuspend()">Sospendi</button>
       <button class="btn btn-s btn-full" onclick="closeAbandon()">Continua a giocare</button>
     </div>
   </div>
@@ -883,8 +864,10 @@ function submitHand() {
   closeHand();
 
   let ended = false;
-  if (G.mode === 'score' && (G.totA >= G.tScore || G.totB >= G.tScore)) ended = true;
-  if (G.mode === 'hands' && G.hands.length >= G.tHands) ended = true;
+  const tScore = parseInt(G.tScore) || 2005;
+  const tHands = parseInt(G.tHands) || 3;
+  if (G.mode === 'score' && (G.totA >= tScore || G.totB >= tScore)) ended = true;
+  if (G.mode === 'hands' && G.hands.length >= tHands) ended = true;
 
   renderGame();
   if (ended) setTimeout(endGame, 250);
@@ -942,26 +925,92 @@ function finishGame() {
   showV('home');
 }
 
-// ── Abandon ───────────────────────────────────────────────────────────────────
+// ── Suspend ───────────────────────────────────────────────────────────────────
 function reqAbandon() {
-  if (!G || !G.hands.length) { doAbandon(); return; }
+  if (!G || !G.hands.length) { doSuspend(); return; }
   document.getElementById('m-abandon').hidden = false;
 }
 function closeAbandon() { document.getElementById('m-abandon').hidden = true; }
-function doAbandon() {
+
+function doSuspend() {
   closeAbandon();
+  if (G) {
+    // Salva come partita sospesa nello storico
+    const [vA, vB] = calcVP(G.totA, G.totB);
+    // Cerca voce esistente con stesso startedAt per aggiornare invece di duplicare
+    const existIdx = H.findIndex(r => r.startedAt === G.startedAt);
+    const entry = {
+      startedAt: G.startedAt,
+      date: new Date().toISOString(),
+      suspended: true,
+      nA: G.nA, nB: G.nB,
+      playersA: G.playersA || [],
+      playersB: G.playersB || [],
+      players: G.players || [],
+      dealer: G.dealer ?? 0,
+      playersPerTeam: G.playersPerTeam || 1,
+      mode: G.mode,
+      tScore: G.tScore,
+      tHands: G.tHands,
+      hands: G.hands,
+      tA: G.totA, tB: G.totB,
+      vpA: vA, vpB: vB,
+      n: G.hands.length
+    };
+    if (existIdx >= 0) H.splice(existIdx, 1);
+    H.unshift(entry);
+    if (H.length > 20) H = H.slice(0, 20);
+  }
   G = null;
   save();
   renderHome();
   showV('home');
 }
 
+function resumeFromHistory(idx) {
+  const r = H[idx];
+  if (!r || !r.suspended) return;
+  // Se c'è una partita attiva, sospendila prima
+  if (G) {
+    if (!confirm('C\'è una partita in corso. Sospenderla per riprendere questa?')) return;
+    doSuspend();
+    // doSuspend ha già modificato H e G, ricalcola idx
+    const newIdx = H.findIndex(entry => entry.startedAt === r.startedAt);
+    if (newIdx < 0) return;
+    resumeFromHistory(newIdx);
+    return;
+  }
+  // Carica la partita sospesa in G
+  G = {
+    startedAt: r.startedAt,
+    nA: r.nA, nB: r.nB,
+    playersA: r.playersA || [],
+    playersB: r.playersB || [],
+    players: r.players || [],
+    dealer: r.dealer ?? 0,
+    playersPerTeam: r.playersPerTeam || 1,
+    mode: r.mode,
+    tScore: r.tScore,
+    tHands: r.tHands,
+    hands: r.hands || [],
+    totA: r.tA, totB: r.tB
+  };
+  // Rimuove dallo storico — ci tornerà quando sospesa/conclusa di nuovo
+  H.splice(H.findIndex(entry => entry.startedAt === r.startedAt), 1);
+  save();
+  // Mostra il tavolo per rivedere posizioni e mazziere
+  resumingGame = true;
+  renderTableView();
+  showV('table');
+}
+
 function resumeGame() {
+  // Mantenuto per compatibilità: se G esiste va al tavolo o al gioco
   if (G && G.players && G.players.length > 0) {
     resumingGame = true;
     renderTableView();
     showV('table');
-  } else {
+  } else if (G) {
     renderGame();
     showV('game');
   }
@@ -969,20 +1018,7 @@ function resumeGame() {
 
 // ── Home ──────────────────────────────────────────────────────────────────────
 function renderHome() {
-  const banner = document.getElementById('resume-banner');
-  if (G) {
-    banner.hidden = false;
-    const d = new Date(G.startedAt);
-    const ds = d.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
-    const ts = d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
-    const scoreTxt = G.hands.length > 0 ? ' · ' + fmt(G.totA) + '–' + fmt(G.totB) : '';
-    const dealerTxt = (G.players && G.players.length && G.dealer != null)
-      ? ' · 👑 ' + G.players[G.dealer].name : '';
-    document.getElementById('resume-info').textContent =
-      `${G.nA} vs ${G.nB} · ${ds} ${ts}${scoreTxt} · ${G.hands.length} smazzate${dealerTxt}`;
-  } else {
-    banner.hidden = true;
-  }
+  // Nulla da aggiornare in home: partite sospese gestite dallo storico
 }
 
 function showHistory() {
@@ -1001,24 +1037,40 @@ function renderHistory() {
   }
   clr.hidden = false;
   card.innerHTML = '';
-  H.forEach(r => {
+  H.forEach((r, idx) => {
     const d  = new Date(r.date);
     const ds = d.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'2-digit' });
     const ts = d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
     const wA = r.tA > r.tB, wB = r.tB > r.tA;
+    const isSuspended = !!r.suspended;
     const item = document.createElement('div');
     item.className = 'hist-item';
+    if (isSuspended) item.style.cursor = 'pointer';
+
+    const dealerName = (r.players && r.players.length && r.dealer != null)
+      ? r.players[r.dealer].name : '';
+
     item.innerHTML = `
-      <div class="hist-meta">${ds} ${ts} · ${r.n} smazzate · VP ${r.vpA}–${r.vpB}</div>
-      <div class="hist-scores">
+      <div class="hist-meta" style="display:flex;align-items:center;gap:6px;">
+        ${isSuspended
+          ? '<span style="background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bdr);border-radius:4px;padding:1px 6px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Sospesa</span>'
+          : ''}
+        <span>${ds} ${ts} · ${r.n} smazzate${!isSuspended ? ' · VP ' + r.vpA + '–' + r.vpB : ''}${dealerName ? ' · 👑 ' + dealerName : ''}</span>
+      </div>
+      <div class="hist-scores" style="margin-top:4px;">
         <span class="num" style="color:var(--a);">${fmt(r.tA)}</span>
         <span style="color:var(--a);font-weight:600;margin-left:2px;">${r.nA}</span>
-        ${wA ? '<span class="win-emoji">😊</span>' : ''}
+        ${wA && !isSuspended ? '<span class="win-emoji">😊</span>' : ''}
         <span style="color:var(--fg-3);flex:1;text-align:center;">—</span>
-        ${wB ? '<span class="win-emoji">😊</span>' : ''}
+        ${wB && !isSuspended ? '<span class="win-emoji">😊</span>' : ''}
         <span style="color:var(--b);font-weight:600;margin-right:2px;">${r.nB}</span>
         <span class="num" style="color:var(--b);">${fmt(r.tB)}</span>
-      </div>`;
+      </div>
+      ${isSuspended ? '<div style="font-size:.72rem;color:var(--a);margin-top:5px;font-weight:600;">▶ Tocca per riprendere</div>' : ''}`;
+
+    if (isSuspended) {
+      item.addEventListener('click', () => resumeFromHistory(idx));
+    }
     card.appendChild(item);
   });
 }
@@ -1165,7 +1217,7 @@ function drawTableSVG() {
     g.appendChild(mkTxt(nameShort, {
       'text-anchor': 'middle', 'dominant-baseline': 'middle',
       y: isDealer ? -6 : 0,
-      'font-size': 10, 'font-family': 'system-ui,sans-serif',
+      'font-size': 12, 'font-family': 'system-ui,sans-serif',
       fill: 'var(--fg)', 'pointer-events': 'none'
     }));
 
@@ -1249,29 +1301,6 @@ function goFromTableToGame() {
   save(); // now save, with seating and dealer confirmed
   renderGame();
   showV('game');
-}
-
-// ── Debug localStorage ────────────────────────────────────────────────────────
-function debugLS() {
-  const out = document.getElementById('debug-out');
-  const bG = localStorage.getItem('bG');
-  const bH = localStorage.getItem('bH');
-  const bN = localStorage.getItem('bNames');
-  const lines = [
-    '=== DEBUG localStorage ===',
-    'Timestamp: ' + new Date().toLocaleString('it-IT'),
-    '',
-    '--- bG (partita in corso) ---',
-    bG ? bG : '(vuoto)',
-    '',
-    '--- bH (storico, ' + (bH ? JSON.parse(bH).length : 0) + ' voci) ---',
-    bH ? bH : '(vuoto)',
-    '',
-    '--- bNames ---',
-    bN ? bN : '(vuoto)'
-  ];
-  out.textContent = lines.join('\n');
-  out.style.display = out.style.display === 'none' ? '' : 'none';
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
