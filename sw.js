@@ -1,4 +1,4 @@
-const CACHE = 'burraco-v16';
+const CACHE = 'burraco-v17';
 const FILES = [
   '/punteggio_burraco/burraco.html',
   '/punteggio_burraco/manifest.json',
