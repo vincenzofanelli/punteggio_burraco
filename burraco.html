@@ -1010,32 +1010,25 @@ function renderBackupBar() {
   else el.textContent = 'Ultimo backup: ' + diff + ' giorni fa';
 }
 
-async function doBackup() {
+function doBackup() {
   const data = { bG: localStorage.getItem('bG'), bH: localStorage.getItem('bH') };
   const json = JSON.stringify(data, null, 2);
   const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
   const filename = 'burraco_backup_' + ts + '.json';
   try {
-    if (window.showSaveFilePicker) {
-      const fh = await window.showSaveFilePicker({
-        suggestedName: filename,
-        types: [{ description: 'Backup JSON', accept: { 'application/json': ['.json'] } }]
-      });
-      const writable = await fh.createWritable();
-      await writable.write(json);
-      await writable.close();
-    } else {
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     localStorage.setItem('bBackup', new Date().toISOString());
     renderBackupBar();
   } catch(e) {
-    // utente ha annullato — nessun messaggio
+    alert('Errore durante l\'esportazione: ' + e.message);
   }
 }
 
