@@ -1011,7 +1011,15 @@ function renderBackupBar() {
 }
 
 function doBackup() {
-  const data = { bG: localStorage.getItem('bG'), bH: localStorage.getItem('bH') };
+  if (G) {
+    const ok = confirm('C\'è una partita in corso.\n\n• OK = sospendi la partita e poi esporta\n• Annulla = esporta senza salvare la partita');
+    if (ok) { doSuspend(); }
+  }
+  const data = {
+    bG: localStorage.getItem('bG'),
+    bH: localStorage.getItem('bH'),
+    bNames: localStorage.getItem('bNames')
+  };
   const json = JSON.stringify(data, null, 2);
   const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
   const filename = 'burraco_backup_' + ts + '.json';
@@ -1526,6 +1534,8 @@ function handleRestoreFile(input) {
       else localStorage.removeItem('bG');
       if (data.bH !== null && data.bH !== undefined) localStorage.setItem('bH', data.bH);
       else localStorage.removeItem('bH');
+      if (data.bNames !== null && data.bNames !== undefined) localStorage.setItem('bNames', data.bNames);
+      else localStorage.removeItem('bNames');
       alert('Backup ripristinato. La app verrà ricaricata.');
       location.reload();
     } catch(err) {
