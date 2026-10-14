@@ -748,7 +748,7 @@ function startGame() {
     if (existIdx >= 0) H.splice(existIdx, 1);
     H.unshift(entry);
     H.sort((a, b) => new Date(b.date) - new Date(a.date));
-    if (H.length > 20) H = H.slice(0, 20);
+    trimHistory();
     G = null;
     save();
   }
@@ -941,22 +941,70 @@ function endGame() {
   showV('results');
 }
 
+function trimHistory() {
+  // Mantieni sempre le partite sospese; rimuovi solo le concluse più vecchie oltre il limite
+  const suspended = H.filter(r => r.suspended);
+  const finished  = H.filter(r => !r.suspended);
+  if (finished.length > 20) {
+    H = [...suspended, ...finished.slice(0, 20)];
+    H.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }
+}
+
 function finishGame() {
   const [vA, vB] = calcVP(G.totA, G.totB);
   H.unshift({
-    date: G.startedAt,
+    startedAt: G.startedAt,
+    date: new Date().toISOString(),
+    suspended: false,
     nA: G.nA, nB: G.nB,
     playersA: G.playersA || [],
     playersB: G.playersB || [],
+    players: G.players || [],
+    dealer: G.dealer ?? 0,
+    playersPerTeam: G.playersPerTeam || 1,
+    mode: G.mode, tScore: G.tScore, tHands: G.tHands,
+    hands: G.hands,
     tA: G.totA, tB: G.totB,
     vpA: vA, vpB: vB,
     n: G.hands.length
   });
-  if (H.length > 20) H = H.slice(0, 20);
+  trimHistory();
   G = null;
   save();
   renderHome();
   showV('home');
+  if (confirm('Confermi salvataggio?')) {
+    exportBackup();
+  }
+}
+
+async function exportBackup() {
+  const data = { bG: localStorage.getItem('bG'), bH: localStorage.getItem('bH') };
+  const json = JSON.stringify(data, null, 2);
+  const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+  const filename = 'burraco_backup_' + ts + '.json';
+  try {
+    if (window.showSaveFilePicker) {
+      const fh = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: 'Backup JSON', accept: { 'application/json': ['.json'] } }]
+      });
+      const writable = await fh.createWritable();
+      await writable.write(json);
+      await writable.close();
+    } else {
+      // Fallback: download automatico (iOS e browser senza File System Access API)
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch(e) {
+    // L'utente ha annullato il selettore — nessun errore da mostrare
+  }
 }
 
 // ── Suspend ───────────────────────────────────────────────────────────────────
@@ -993,7 +1041,7 @@ function doSuspend() {
     };
     if (existIdx >= 0) H.splice(existIdx, 1);
     H.unshift(entry);
-    if (H.length > 20) H = H.slice(0, 20);
+    trimHistory();
   }
   G = null;
   save();
@@ -1113,7 +1161,10 @@ function renderHistory() {
     del.style.cssText = 'position:absolute;top:10px;right:0;background:none;border:none;font-size:1rem;cursor:pointer;padding:4px;color:var(--fg-3);';
     del.addEventListener('click', e => {
       e.stopPropagation();
-      if (confirm('Eliminare questa partita?')) deleteHistoryEntry(key);
+      const msg = isSuspended
+        ? 'Questa partita è sospesa e non ancora conclusa.\nEliminarla definitivamente?'
+        : 'Eliminare questa partita?';
+      if (confirm(msg)) deleteHistoryEntry(key);
     });
     item.appendChild(del);
 
@@ -1233,9 +1284,9 @@ function drawTableSVG() {
     return e;
   }
 
-  // Green felt
-  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: '#1e6b38', opacity: '0.18' }));
-  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: 'none', stroke: '#1e6b38', 'stroke-width': '1.5', opacity: '0.35' }));
+  // Sky blue felt
+  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: '#87ceeb', opacity: '0.28' }));
+  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: 'none', stroke: '#4aa3d4', 'stroke-width': '1.5', opacity: '0.55' }));
 
   G.players.forEach((player, i) => {
     const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
@@ -1249,36 +1300,29 @@ function drawTableSVG() {
     g.setAttribute('transform', `translate(${px.toFixed(1)},${py.toFixed(1)})`);
     g.style.cursor = 'pointer';
 
-    // Seat background
+    // Seat background — dealer gets golden fill + thick border
     g.appendChild(mkEl('circle', {
       r: 25,
-      fill: isSelected ? 'var(--a-bg)' : 'var(--surface)',
-      stroke: isSelected ? 'var(--a)' : teamClr,
-      'stroke-width': isSelected ? 3 : 1.5
+      fill: isSelected ? 'var(--a-bg)' : isDealer ? '#fff8dc' : 'var(--surface)',
+      stroke: isSelected ? 'var(--a)' : isDealer ? '#c8970a' : teamClr,
+      'stroke-width': isSelected ? 3 : isDealer ? 3.5 : 1.5
     }));
 
-    // Player name (move up slightly if dealer, to leave room for crown)
+    // Player name
     const nameShort = player.name.length > 9 ? player.name.slice(0, 8) + '…' : player.name;
     g.appendChild(mkTxt(nameShort, {
       'text-anchor': 'middle', 'dominant-baseline': 'middle',
-      y: isDealer ? -6 : 0,
-      'font-size': 12, 'font-family': 'system-ui,sans-serif',
-      fill: 'var(--fg)', 'pointer-events': 'none'
+      y: 0,
+      'font-size': 14, 'font-family': 'system-ui,sans-serif',
+      fill: isDealer ? '#8a5f00' : 'var(--fg)', 'font-weight': isDealer ? 700 : 400,
+      'pointer-events': 'none'
     }));
-
-    // Crown emoji for dealer
-    if (isDealer) {
-      g.appendChild(mkTxt('♛', {
-        'text-anchor': 'middle', 'dominant-baseline': 'middle',
-        y: 10, 'font-size': 10, fill: '#c8970a', 'pointer-events': 'none'
-      }));
-    }
 
     // Team label (tiny, below)
     g.appendChild(mkTxt(player.team, {
-      'text-anchor': 'middle', y: isDealer ? 21 : 16,
+      'text-anchor': 'middle', y: 16,
       'font-size': 6.5, 'font-family': 'system-ui,sans-serif',
-      fill: teamClr, 'font-weight': 700, 'pointer-events': 'none'
+      fill: isDealer ? '#c8970a' : teamClr, 'font-weight': 700, 'pointer-events': 'none'
     }));
 
     // Hit area — explicit onclick so mobile tap fires on both first and second tap
