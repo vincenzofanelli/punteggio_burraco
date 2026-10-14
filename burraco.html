@@ -229,6 +229,9 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
   padding: 8px 0; font-size: .875rem;
   border-bottom: 1px solid var(--border);
 }
+.hand-row-edit { grid-template-columns: 28px 1fr 1fr 20px; cursor: pointer; }
+.hand-row-edit:active { background: var(--surface-2); border-radius: 6px; }
+.hand-edit-ico { color: var(--fg-3); font-size: .85rem; text-align: right; }
 .hand-row:last-child { border-bottom: none; }
 .hand-hdr { font-size: .7rem; font-weight: 700; color: var(--fg-3); border-bottom: 1px solid var(--border); }
 .hand-num { color: var(--fg-3); font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -403,12 +406,12 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
   <div class="stack gap12">
     <div class="card stack gap12">
       <div class="field">
-        <label>Giocatori per squadra</label>
+        <label>Giocatori totali</label>
         <div class="seg" id="seg-pl">
-          <button class="on" data-v="1" onclick="setPl(1)">1</button>
-          <button data-v="2" onclick="setPl(2)">2</button>
-          <button data-v="3" onclick="setPl(3)">3</button>
-          <button data-v="4" onclick="setPl(4)">4</button>
+          <button class="on" data-v="1" onclick="setPl(1)">2</button>
+          <button data-v="2" onclick="setPl(2)">4</button>
+          <button data-v="3" onclick="setPl(3)">6</button>
+          <button data-v="4" onclick="setPl(4)">8</button>
         </div>
       </div>
     </div>
@@ -860,25 +863,47 @@ function renderHandsInGame() {
   if (!G.hands.length) { emp.hidden = false; return; }
   emp.hidden = true;
   [...G.hands].reverse().forEach((h, i) => {
-    const idx = G.hands.length - i;
+    const realIdx = G.hands.length - 1 - i; // indice reale nell'array
+    const dispIdx = realIdx + 1;             // numero mostrato (1-based)
     const row = document.createElement('div');
-    row.className = 'hand-row';
+    row.className = 'hand-row hand-row-edit';
+    row.title = 'Tocca per modificare';
     row.innerHTML = `
-      <span class="hand-num">${idx}</span>
+      <span class="hand-num">${dispIdx}</span>
       <span class="va">${signed(h.a)}</span>
-      <span class="vb">${signed(h.b)}</span>`;
+      <span class="vb">${signed(h.b)}</span>
+      <span class="hand-edit-ico">✎</span>`;
+    row.addEventListener('click', () => openEditHand(realIdx));
     el.appendChild(row);
   });
 }
 
-// ── Add hand modal ────────────────────────────────────────────────────────────
+// ── Add / edit hand modal ─────────────────────────────────────────────────────
+let editHandIdx = -1; // -1 = nuova smazzata, >=0 = modifica smazzata esistente
+
 function openAddHand() {
+  editHandIdx = -1;
   document.getElementById('m-hand-title').textContent = 'Smazzata ' + (G.hands.length + 1);
   document.getElementById('m-na').textContent = G.nA;
   document.getElementById('m-nb').textContent = G.nB;
   ['m-ba','m-ca','m-bb','m-cb'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('m-ta').textContent = '0';
   document.getElementById('m-tb').textContent = '0';
+  document.getElementById('m-hand').hidden = false;
+  setTimeout(() => document.getElementById('m-ba').focus(), 60);
+}
+
+function openEditHand(idx) {
+  editHandIdx = idx;
+  const h = G.hands[idx];
+  document.getElementById('m-hand-title').textContent = 'Modifica smazzata ' + (idx + 1);
+  document.getElementById('m-na').textContent = G.nA;
+  document.getElementById('m-nb').textContent = G.nB;
+  document.getElementById('m-ba').value = h.bA ?? '';
+  document.getElementById('m-ca').value = h.cA ?? '';
+  document.getElementById('m-bb').value = h.bB ?? '';
+  document.getElementById('m-cb').value = h.cB ?? '';
+  updTotal();
   document.getElementById('m-hand').hidden = false;
   setTimeout(() => document.getElementById('m-ba').focus(), 60);
 }
@@ -911,12 +936,23 @@ function submitHand() {
   const bB = parseInt(document.getElementById('m-bb').value) || 0;
   const cB = parseInt(document.getElementById('m-cb').value) || 0;
   const a = bA + cA, b = bB + cB;
-  G.hands.push({ bA, cA, bB, cB, a, b });
-  G.totA += a;
-  G.totB += b;
-  if (G.players && G.players.length > 0) {
-    G.dealer = (G.dealer + 1) % G.players.length;
+
+  if (editHandIdx >= 0) {
+    // Modifica smazzata esistente: ricalcola i totali sottraendo i vecchi valori
+    const old = G.hands[editHandIdx];
+    G.totA = G.totA - old.a + a;
+    G.totB = G.totB - old.b + b;
+    G.hands[editHandIdx] = { bA, cA, bB, cB, a, b };
+  } else {
+    // Nuova smazzata
+    G.hands.push({ bA, cA, bB, cB, a, b });
+    G.totA += a;
+    G.totB += b;
+    if (G.players && G.players.length > 0) {
+      G.dealer = (G.dealer + 1) % G.players.length;
+    }
   }
+
   save();
   closeHand();
 
