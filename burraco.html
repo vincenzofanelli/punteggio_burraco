@@ -377,6 +377,8 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     " title="Chiudi">✕</button>
   </div>
 
+  <div id="home-active-game" style="display:none;margin-bottom:12px;"></div>
+
   <div class="home-tile-wrap mt8">
     <button class="btn btn-p home-tile" onclick="goSetup()">+ Nuova partita</button>
     <button class="btn btn-s home-tile" onclick="showHistory()">📋 Storico partite</button>
@@ -801,7 +803,7 @@ function startGame() {
     hands: [],
     totA: 0, totB: 0
   };
-  // Don't save yet — user finalises seating/dealer on table view
+  save(); // salva subito: se si esce dalla view tavolo la partita non si perde
   renderTableView();
   showV('table');
 }
@@ -1164,7 +1166,27 @@ function resumeGame() {
 
 // ── Home ──────────────────────────────────────────────────────────────────────
 function renderHome() {
-  // Nulla da aggiornare in home: partite sospese gestite dallo storico
+  const el = document.getElementById('home-active-game');
+  if (!el) return;
+  if (!G) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  const n = G.hands.length;
+  const sub = G.mode === 'score'
+    ? fmt(G.totA) + ' – ' + fmt(G.totB) + ' pt · ' + n + ' smazzate'
+    : n + ' / ' + G.tHands + ' smazzate';
+  el.innerHTML = `
+    <div class="card" style="border:1.5px solid var(--a);background:var(--a-bg);">
+      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--a);margin-bottom:6px;">Partita in corso</div>
+      <div style="font-weight:700;font-size:.9375rem;color:var(--fg);margin-bottom:2px;">${G.nA} vs ${G.nB}</div>
+      <div style="font-size:.82rem;color:var(--fg-2);margin-bottom:10px;">${sub}</div>
+      <button class="btn btn-p btn-full btn-sm" onclick="resumeActiveGame()">Riprendi partita</button>
+    </div>`;
+}
+
+function resumeActiveGame() {
+  if (!G) return;
+  renderGame();
+  showV('game');
 }
 
 function showHistory() {
