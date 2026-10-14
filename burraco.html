@@ -87,8 +87,25 @@ body {
 }
 
 /* ── Views ─────────────────────────────────── */
-.view { display: none; max-width: 500px; margin: 0 auto; padding-bottom: 32px; }
+.view { display: none; max-width: 500px; margin: 0 auto; padding-bottom: 80px; }
 .view.active { display: block; }
+
+/* ── Backup bar ─────────────────────────────── */
+#backup-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; max-width: 500px; margin: 0 auto;
+}
+#backup-bar-label { font-size: .72rem; color: var(--fg-3); line-height: 1.3; }
+#backup-bar-label strong { display: block; font-size: .75rem; color: var(--fg-2); }
+#backup-bar-btn {
+  flex-shrink: 0; padding: 6px 14px; font-size: .8rem; font-weight: 600;
+  border-radius: var(--radius-s); border: 1.5px solid var(--warn-bdr);
+  background: var(--warn-bg); color: var(--warn); cursor: pointer;
+  white-space: nowrap;
+}
 
 /* ── Typography ────────────────────────────── */
 h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; }
@@ -974,12 +991,20 @@ function finishGame() {
   save();
   renderHome();
   showV('home');
-  if (confirm('Confermi salvataggio?')) {
-    exportBackup();
-  }
 }
 
-async function exportBackup() {
+function renderBackupBar() {
+  const el = document.getElementById('backup-bar-status');
+  if (!el) return;
+  const ts = localStorage.getItem('bBackup');
+  if (!ts) { el.textContent = 'Ultimo backup: mai'; return; }
+  const diff = Math.floor((Date.now() - new Date(ts)) / 86400000);
+  if (diff === 0) el.textContent = 'Ultimo backup: oggi';
+  else if (diff === 1) el.textContent = 'Ultimo backup: ieri';
+  else el.textContent = 'Ultimo backup: ' + diff + ' giorni fa';
+}
+
+async function doBackup() {
   const data = { bG: localStorage.getItem('bG'), bH: localStorage.getItem('bH') };
   const json = JSON.stringify(data, null, 2);
   const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
@@ -994,7 +1019,6 @@ async function exportBackup() {
       await writable.write(json);
       await writable.close();
     } else {
-      // Fallback: download automatico (iOS e browser senza File System Access API)
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1002,8 +1026,10 @@ async function exportBackup() {
       a.click();
       URL.revokeObjectURL(url);
     }
+    localStorage.setItem('bBackup', new Date().toISOString());
+    renderBackupBar();
   } catch(e) {
-    // L'utente ha annullato il selettore — nessun errore da mostrare
+    // utente ha annullato — nessun messaggio
   }
 }
 
@@ -1482,6 +1508,16 @@ function doInstall() {
 }
 
 setUtility('ok');
+renderBackupBar();
 </script>
+
+<div id="backup-bar">
+  <div id="backup-bar-label">
+    <strong>Backup dati</strong>
+    <span id="backup-bar-status">Ultimo backup: mai</span>
+  </div>
+  <button id="backup-bar-btn" onclick="doBackup()">Esporta</button>
+</div>
+
 </body>
 </html>
