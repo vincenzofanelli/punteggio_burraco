@@ -738,9 +738,32 @@ function startGame() {
     pB.push(nmb.slice(0, 20));
   }
   if (!valid) {
-    if (errEl) errEl.style.display = '';
+    if (errEl) { errEl.textContent = '⚠️ Inserisci il nome di tutti i giocatori prima di iniziare'; errEl.style.display = ''; }
     return;
   }
+
+  // Controlla nomi duplicati (case-insensitive, ignora spazi extra)
+  const allNames = pA.concat(pB).map(n => n.trim());
+  const normalized = allNames.map(n => n.toLowerCase().replace(/\s+/g, ' '));
+  const duplicates = allNames.filter((_, i) => normalized.indexOf(normalized[i]) !== i);
+  if (duplicates.length) {
+    // Evidenzia i campi con nome duplicato
+    const allInputIds = [];
+    for (let i = 0; i < sPl; i++) { allInputIds.push('pna' + i); allInputIds.push('pnb' + i); }
+    allInputIds.forEach(id => {
+      const inp = document.getElementById(id);
+      if (!inp) return;
+      const norm = inp.value.trim().toLowerCase().replace(/\s+/g, ' ');
+      inp.style.borderColor = normalized.filter(n => n === norm).length > 1 ? 'var(--b)' : '';
+    });
+    if (errEl) {
+      const names = [...new Set(duplicates)].join(', ');
+      errEl.textContent = '⚠️ Nome duplicato: ' + names + '. Ogni giocatore deve avere un nome univoco.';
+      errEl.style.display = '';
+    }
+    return;
+  }
+
   if (errEl) errEl.style.display = 'none';
 
   // Auto-generate team names from initials
