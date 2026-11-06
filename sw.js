@@ -1,4 +1,4 @@
-const CACHE = 'burraco-v27';
+const CACHE = 'burraco-v28';
 const FILES = [
   '/punteggio_burraco/burraco.html',
   '/punteggio_burraco/manifest.json',
@@ -7,8 +7,13 @@ const FILES = [
 ];
 
 self.addEventListener('install', e => {
+  // Fix #1: install non-atomic — un file mancante non blocca tutto
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(FILES))
+    caches.open(CACHE).then(async c => {
+      for (const f of FILES) {
+        try { await c.add(f); } catch(err) { console.warn('SW: skip', f, err); }
+      }
+    })
   );
 });
 
@@ -22,8 +27,20 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Fix #3: ignora richieste non-GET
+  if (e.request.method !== 'GET') return;
+
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    caches.open(CACHE).then(c =>
+      c.match(e.request).then(cached => {
+        if (cached) return cached;
+        // Fix #2: fallback offline — navigation request → servi l'HTML principale
+        if (e.request.mode === 'navigate') {
+          return c.match('/punteggio_burraco/burraco.html') || fetch(e.request);
+        }
+        return fetch(e.request);
+      })
+    )
   );
 });
 
