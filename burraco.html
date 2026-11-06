@@ -353,7 +353,8 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
 .pname-drop-item:active { background: var(--surface-2); }
 
 /* ── Table view ────────────────────────────── */
-#table-svg { width: 100%; max-width: 340px; display: block; margin: 0 auto; }
+#table-svg { width: 100%; max-width: 420px; display: block; margin: 0 auto; cursor: default; }
+#table-svg.spinning { cursor: not-allowed; }
 </style>
 
 <!-- ═══ HOME ════════════════════════════════════════════════════════════ -->
@@ -458,7 +459,7 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     <h2>Tavolo di gioco</h2>
   </div>
   <div class="card stack gap12" style="margin-bottom:14px;">
-    <p style="font-size:.82rem;color:var(--fg-2);line-height:1.45;">Tocca un giocatore per selezionarlo, poi tocca un altro per scambiare la posizione. Usa il pulsante per indicare il mazziere.</p>
+    <p style="font-size:.82rem;color:var(--fg-2);line-height:1.45;">Tocca un giocatore per selezionarlo, poi tocca un altro per scambiare. <strong>Tocca il centro del tavolo</strong> per estrarre il mazziere a caso, oppure seleziona un giocatore e usa il pulsante.</p>
     <svg id="table-svg" viewBox="0 0 300 200"></svg>
     <div id="table-sel-info" style="font-size:.82rem;text-align:center;color:var(--fg-2);min-height:1.3em;"></div>
     <button id="btn-set-dealer" class="btn btn-s btn-full btn-sm" onclick="setDealer()" disabled>👑 Segna come mazziere</button>
@@ -975,6 +976,7 @@ function submitHand() {
     G.totB += b;
     if (G.players && G.players.length > 0) {
       G.dealer = (G.dealer + 1) % G.players.length;
+      _wheelAngle = null; // la freccia tornerà a puntare al nuovo mazziere
     }
   }
 
@@ -1372,11 +1374,19 @@ let resumingGame = false;
 
 function renderTableView() {
   tableSelected = null;
+  _wheelSpinning = false;
+  // Se si riprende una partita, la freccia punta già al mazziere salvato;
+  // se è nuova, resettiamo così la freccia parte dal dealer di default (indice 0)
+  _wheelAngle = null;
   drawTableSVG();
   updateTableUI();
   const goBtn = document.getElementById('btn-go-game');
   if (goBtn) goBtn.textContent = resumingGame ? 'Riprendi partita →' : 'Inizia partita →';
 }
+
+// ── Wheel animation state ─────────────────────────────────────────────────────
+let _wheelAngle = null;   // angolo attuale della freccia (radianti), null = nessuna freccia
+let _wheelSpinning = false;
 
 function drawTableSVG() {
   const svg = document.getElementById('table-svg');
@@ -1384,7 +1394,25 @@ function drawTableSVG() {
   svg.innerHTML = '';
   const ns = 'http://www.w3.org/2000/svg';
   const n = G.players.length;
-  const cx = 150, cy = 100, rx = 108, ry = 65;
+
+  // ── Dimensioni dinamiche ──────────────────────────────────────────────────
+  // ViewBox quadrato 320×320, centro (160,160)
+  const VW = 320, VH = 320;
+  svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
+  const cx = VW / 2, cy = VH / 2;
+
+  // Raggio ellisse scala con numero giocatori: più giocatori → ellisse più grande
+  // Min 6 giocatori: rx=118 ry=100; 2 giocatori: rx=100 ry=82
+  const baseRx = Math.min(130, 90 + n * 7);
+  const baseRy = Math.min(110, 72 + n * 6);
+  const rx = baseRx, ry = baseRy;
+
+  // Raggio cerchio giocatore: si riduce se ci sono molti giocatori
+  const cr = n <= 4 ? 32 : n <= 6 ? 28 : 24;
+  // Font name size
+  const fnSz = n <= 4 ? 15 : n <= 6 ? 13 : 11;
+  // Max chars nel nome
+  const maxCh = n <= 4 ? 10 : n <= 6 ? 9 : 7;
 
   function mkEl(tag, attrs) {
     const e = document.createElementNS(ns, tag);
@@ -1398,54 +1426,253 @@ function drawTableSVG() {
     return e;
   }
 
-  // Sky blue felt
-  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: '#87ceeb', opacity: '0.28' }));
-  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 22, ry: ry - 18, fill: 'none', stroke: '#4aa3d4', 'stroke-width': '1.5', opacity: '0.55' }));
+  // ── Feltro ────────────────────────────────────────────────────────────────
+  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 28, ry: ry - 22,
+    fill: '#87ceeb', opacity: '0.28' }));
+  svg.appendChild(mkEl('ellipse', { cx, cy, rx: rx - 28, ry: ry - 22,
+    fill: 'none', stroke: '#4aa3d4', 'stroke-width': '1.5', opacity: '0.55' }));
 
+  // ── Area clic centrale per la ruota ───────────────────────────────────────
+  const hitCenter = mkEl('circle', {
+    cx, cy, r: Math.min(rx - 32, ry - 26),
+    fill: 'rgba(0,0,0,.001)', style: 'cursor:pointer'
+  });
+  hitCenter.setAttribute('onclick', '_wheelSpinning ? null : spinWheel()');
+  svg.appendChild(hitCenter);
+
+  // ── Giocatori ─────────────────────────────────────────────────────────────
   G.players.forEach((player, i) => {
     const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
     const px = cx + rx * Math.cos(angle);
     const py = cy + ry * Math.sin(angle);
     const isSelected = i === tableSelected;
-    const isDealer = i === G.dealer;
-    const teamClr = player.team === 'A' ? 'var(--a)' : 'var(--b)';
+    const isDealer   = i === G.dealer;
+    const teamClr    = player.team === 'A' ? 'var(--a)' : 'var(--b)';
 
     const g = document.createElementNS(ns, 'g');
     g.setAttribute('transform', `translate(${px.toFixed(1)},${py.toFixed(1)})`);
     g.style.cursor = 'pointer';
 
-    // Seat background — dealer gets golden fill + thick border
     g.appendChild(mkEl('circle', {
-      r: 25,
-      fill: isSelected ? 'var(--a-bg)' : isDealer ? '#fff8dc' : 'var(--surface)',
-      stroke: isSelected ? 'var(--a)' : isDealer ? '#c8970a' : teamClr,
+      r: cr,
+      fill:   isSelected ? 'var(--a-bg)' : isDealer ? '#fff8dc' : 'var(--surface)',
+      stroke: isSelected ? 'var(--a)'    : isDealer ? '#c8970a' : teamClr,
       'stroke-width': isSelected ? 3 : isDealer ? 3.5 : 1.5
     }));
 
-    // Player name
-    const nameShort = player.name.length > 9 ? player.name.slice(0, 8) + '…' : player.name;
+    const nameShort = player.name.length > maxCh ? player.name.slice(0, maxCh - 1) + '…' : player.name;
     g.appendChild(mkTxt(nameShort, {
-      'text-anchor': 'middle', 'dominant-baseline': 'middle',
-      y: 0,
-      'font-size': 14, 'font-family': 'system-ui,sans-serif',
-      fill: isDealer ? '#8a5f00' : 'var(--fg)', 'font-weight': isDealer ? 700 : 400,
+      'text-anchor': 'middle', 'dominant-baseline': 'middle', y: -3,
+      'font-size': fnSz, 'font-family': 'system-ui,sans-serif',
+      fill: isDealer ? '#8a5f00' : 'var(--fg)',
+      'font-weight': isDealer ? 700 : 400,
       'pointer-events': 'none'
     }));
 
-    // Team label (tiny, below)
     g.appendChild(mkTxt(player.team, {
-      'text-anchor': 'middle', y: 16,
-      'font-size': 6.5, 'font-family': 'system-ui,sans-serif',
-      fill: isDealer ? '#c8970a' : teamClr, 'font-weight': 700, 'pointer-events': 'none'
+      'text-anchor': 'middle', y: cr - 10,
+      'font-size': 7, 'font-family': 'system-ui,sans-serif',
+      fill: isDealer ? '#c8970a' : teamClr,
+      'font-weight': 700, 'pointer-events': 'none'
     }));
 
-    // Hit area — explicit onclick so mobile tap fires on both first and second tap
-    const hit = mkEl('circle', { r: 29, fill: 'rgba(0,0,0,.001)', style: 'cursor:pointer' });
+    const hit = mkEl('circle', { r: cr + 4, fill: 'rgba(0,0,0,.001)', style: 'cursor:pointer' });
     hit.setAttribute('onclick', 'handleSeatTap(' + i + ')');
     g.appendChild(hit);
 
     svg.appendChild(g);
   });
+
+  // ── Freccia mazziere ──────────────────────────────────────────────────────
+  // Se _wheelAngle è null, punta verso il dealer corrente
+  const dealerAngle = (G.dealer / n) * 2 * Math.PI - Math.PI / 2;
+  const arrowAngle  = (_wheelAngle !== null) ? _wheelAngle : dealerAngle;
+
+  _drawArrow(svg, mkEl, cx, cy, rx, ry, arrowAngle, _wheelSpinning);
+}
+
+function _dealerAngle() {
+  const n = G.players.length;
+  return (G.dealer / n) * 2 * Math.PI - Math.PI / 2;
+}
+
+function _drawArrow(svg, mkEl, cx, cy, rx, ry, angle, spinning) {
+  // Lunghezza freccia: arriva a ~65% del raggio verso il bordo interno del feltro
+  const arrowLen = Math.min(rx, ry) * 0.62;
+  const tipX = cx + arrowLen * Math.cos(angle);
+  const tipY = cy + arrowLen * Math.sin(angle);
+
+  // Punta di freccia come triangolo
+  const headLen = 14, headW = 7;
+  const ax = Math.cos(angle), ay = Math.sin(angle);
+  const bx = -ay, by = ax; // perpendicolare
+
+  const p1x = tipX, p1y = tipY;
+  const p2x = tipX - ax * headLen + bx * headW;
+  const p2y = tipY - ay * headLen + by * headW;
+  const p3x = tipX - ax * headLen - bx * headW;
+  const p3y = tipY - ay * headLen - by * headW;
+
+  const arrowClr = spinning ? '#a09070' : '#c8970a';
+
+  // Stelo
+  const line = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', String(cx));
+  line.setAttribute('y1', String(cy));
+  line.setAttribute('x2', String((tipX - ax * headLen * 0.5).toFixed(1)));
+  line.setAttribute('y2', String((tipY - ay * headLen * 0.5).toFixed(1)));
+  line.setAttribute('stroke', arrowClr);
+  line.setAttribute('stroke-width', '3');
+  line.setAttribute('stroke-linecap', 'round');
+  line.setAttribute('pointer-events', 'none');
+  svg.appendChild(line);
+
+  // Punta
+  const tri = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  tri.setAttribute('points', `${p1x.toFixed(1)},${p1y.toFixed(1)} ${p2x.toFixed(1)},${p2y.toFixed(1)} ${p3x.toFixed(1)},${p3y.toFixed(1)}`);
+  tri.setAttribute('fill', arrowClr);
+  tri.setAttribute('pointer-events', 'none');
+  svg.appendChild(tri);
+
+  // Perno centrale
+  const pivot = svg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  pivot.setAttribute('cx', String(cx));
+  pivot.setAttribute('cy', String(cy));
+  pivot.setAttribute('r', '5');
+  pivot.setAttribute('fill', arrowClr);
+  pivot.setAttribute('pointer-events', 'none');
+  svg.appendChild(pivot);
+}
+
+// ── Ruota della fortuna ───────────────────────────────────────────────────────
+// ── Audio engine (Web Audio API, nessun file esterno) ─────────────────────────
+let _audioCtx = null;
+
+function _getAudio() {
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { _audioCtx = null; }
+  }
+  return _audioCtx;
+}
+
+// Tick singolo: breve tono percussivo (tipo piolo della ruota)
+function _playTick(freq, vol) {
+  const ctx = _getAudio();
+  if (!ctx) return;
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, ctx.currentTime);
+  gain.gain.setValueAtTime(vol, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + 0.09);
+}
+
+// Ding finale: tono più lungo e melodico
+function _playDing() {
+  const ctx = _getAudio();
+  if (!ctx) return;
+  // Triade: fondamentale + quinta + ottava per suono festoso
+  [[880, 0.0],  [1320, 0.04], [1760, 0.08]].forEach(([freq, delay]) => {
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+    gain.gain.setValueAtTime(0.28, ctx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.9);
+    osc.start(ctx.currentTime + delay);
+    osc.stop(ctx.currentTime + delay + 1.0);
+  });
+}
+
+// ── Ruota della fortuna ───────────────────────────────────────────────────────
+function spinWheel() {
+  if (!G || _wheelSpinning) return;
+
+  // Sblocca AudioContext su gesto utente (richiesto da browser mobile)
+  const ctx = _getAudio();
+  if (ctx && ctx.state === 'suspended') ctx.resume();
+
+  const n = G.players.length;
+
+  // Angolo di partenza
+  const startAngle = (_wheelAngle !== null)
+    ? _wheelAngle
+    : (G.dealer / n) * 2 * Math.PI - Math.PI / 2;
+
+  // Destinazione: crypto random
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  const winner = arr[0] % n;
+  const targetBaseAngle = (winner / n) * 2 * Math.PI - Math.PI / 2;
+
+  // Giri extra 4–7
+  const extraRounds = new Uint32Array(1);
+  crypto.getRandomValues(extraRounds);
+  const rounds = 4 + (extraRounds[0] % 4);
+  const totalRotation = rounds * 2 * Math.PI + (targetBaseAngle - startAngle + 2 * Math.PI * 20) % (2 * Math.PI);
+  const endAngle = startAngle + totalRotation;
+
+  _wheelSpinning = true;
+  const svg = document.getElementById('table-svg');
+  if (svg) svg.classList.add('spinning');
+
+  const duration = 3500; // ms
+  const startTime = performance.now();
+
+  // Stato tick audio: traccio l'ultimo angolo in cui ho emesso un tick
+  // per suonare esattamente ogni volta che la freccia supera un "piolo"
+  // (= uno spazio tra giocatori)
+  const tickStep = (2 * Math.PI) / (n * 3); // 3 tick per slot giocatore
+  let lastTickAngle = startAngle;
+
+  function easeOut(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function frame(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    _wheelAngle = startAngle + (endAngle - startAngle) * easeOut(t);
+    drawTableSVG();
+
+    // Emetti tick ogni volta che la freccia supera un piolo
+    const ticksPassed = Math.floor((_wheelAngle - lastTickAngle) / tickStep);
+    if (ticksPassed > 0) {
+      lastTickAngle += ticksPassed * tickStep;
+      // Velocità istantanea: derivata di easeOut in t
+      const speed = 3 * Math.pow(1 - t, 2); // derivata di cubic easeOut, normalizzata 0–1
+      // Frequenza del tick: sale con la velocità (200–600 Hz)
+      const freq = 200 + speed * 400;
+      // Volume: leggermente più forte quando è lento (finale più drammatico)
+      const vol  = 0.08 + (1 - speed) * 0.12;
+      _playTick(freq, vol);
+    }
+
+    if (t < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      _wheelAngle = targetBaseAngle;
+      _wheelSpinning = false;
+      if (svg) svg.classList.remove('spinning');
+
+      G.dealer = winner;
+      tableSelected = null;
+      drawTableSVG();
+      updateTableUI();
+
+      // Ding festoso di arrivo
+      _playDing();
+    }
+  }
+
+  requestAnimationFrame(frame);
 }
 
 function handleSeatTap(idx) {
@@ -1484,6 +1711,7 @@ function updateTableUI() {
 function setDealer() {
   if (tableSelected === null) return;
   G.dealer = tableSelected;
+  _wheelAngle = null; // freccia torna a puntare al dealer scelto manualmente
   tableSelected = null;
   drawTableSVG();
   updateTableUI();
