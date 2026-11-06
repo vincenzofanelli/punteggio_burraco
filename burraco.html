@@ -459,10 +459,9 @@ hr { border: none; border-top: 1px solid var(--border); margin-block: 14px; }
     <h2>Tavolo di gioco</h2>
   </div>
   <div class="card stack gap12" style="margin-bottom:14px;">
-    <p style="font-size:.82rem;color:var(--fg-2);line-height:1.45;">Tocca un giocatore per selezionarlo, poi tocca un altro per scambiare. <strong>Tocca il centro del tavolo</strong> per estrarre il mazziere a caso, oppure seleziona un giocatore e usa il pulsante.</p>
+    <p style="font-size:.82rem;color:var(--fg-2);line-height:1.45;">Tocca un giocatore per impostarlo come mazziere, poi toccane un altro per scambiare la posizione. <strong>Tocca il centro del tavolo</strong> per estrarre il mazziere a caso.</p>
     <svg id="table-svg" viewBox="0 0 300 200"></svg>
     <div id="table-sel-info" style="font-size:.82rem;text-align:center;color:var(--fg-2);min-height:1.3em;"></div>
-    <button id="btn-set-dealer" class="btn btn-s btn-full btn-sm" onclick="setDealer()" disabled>👑 Segna come mazziere</button>
   </div>
   <button id="btn-go-game" class="btn btn-p btn-full" onclick="goFromTableToGame()">Inizia partita →</button>
 </div>
@@ -1677,15 +1676,20 @@ function spinWheel() {
 
 function handleSeatTap(idx) {
   if (tableSelected === null) {
+    // Primo tocco: imposta subito come mazziere, freccia si sposta su di lui
     tableSelected = idx;
+    G.dealer = idx;
+    _wheelAngle = null;
   } else if (tableSelected === idx) {
+    // Secondo tocco sullo stesso: deseleziona
     tableSelected = null;
   } else {
-    // Swap positions
+    // Tocco su un secondo giocatore diverso: scambia posizioni
     const a = tableSelected, b = idx;
     [G.players[a], G.players[b]] = [G.players[b], G.players[a]];
     if (G.dealer === a) G.dealer = b;
     else if (G.dealer === b) G.dealer = a;
+    _wheelAngle = null;
     tableSelected = null;
   }
   drawTableSVG();
@@ -1694,27 +1698,14 @@ function handleSeatTap(idx) {
 
 function updateTableUI() {
   const info = document.getElementById('table-sel-info');
-  const btn  = document.getElementById('btn-set-dealer');
-  if (!info || !btn) return;
+  if (!info) return;
   if (tableSelected === null) {
-    info.textContent = 'Tocca un giocatore per selezionarlo';
-    btn.disabled = true;
-    btn.textContent = '👑 Segna come mazziere';
+    const p = G && G.players && G.dealer != null ? G.players[G.dealer] : null;
+    info.textContent = p ? '👑 Mazziere: ' + p.name + ' — tocca un altro per cambiare' : 'Tocca un giocatore per impostarlo come mazziere';
   } else {
     const p = G.players[tableSelected];
-    info.textContent = p.name + ' selezionato — tocca un altro per scambiare';
-    btn.disabled = false;
-    btn.textContent = '👑 ' + p.name + ' è il mazziere';
+    info.textContent = '👑 ' + p.name + ' è il mazziere — tocca un altro per scambiare posizione';
   }
-}
-
-function setDealer() {
-  if (tableSelected === null) return;
-  G.dealer = tableSelected;
-  _wheelAngle = null; // freccia torna a puntare al dealer scelto manualmente
-  tableSelected = null;
-  drawTableSVG();
-  updateTableUI();
 }
 
 function backFromTable() {
